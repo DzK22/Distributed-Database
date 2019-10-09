@@ -17,4 +17,4 @@ $(OBJ_DIR)clients.o: $(SRC_DIR)clients.c $(HD_DIR)clients.h
 	mv clients.o $(OBJ_DIR)
 
 clean:
-	rm -rf $(OBJ_DIR)* main
+	rm -rf $(OBJ_DIR)* main doc/
