@@ -22,6 +22,7 @@ int main()
   char azerty[N];
   bool ok = false;
   int rec;
+  char tmp[N];
   if ((rec = recvfrom(sock, &azerty, N, 0, (struct sockaddr *)&client, &clientaddr)) == -1)
   {
     perror("recvfrom error");
@@ -30,8 +31,13 @@ int main()
   printf("%s\n", azerty);
   while ((boucle = fgets(ret,N,fp)) != NULL)
   {
-    printf("%s\n", ret);
-    if (strncmp(ret, azerty, strlen(azerty)) == 0)
+    size_t i;
+    for (i = 0; i < strlen(ret) && ret[i] != '('; i++)
+    {
+      tmp[i] = ret[i];
+    }
+    tmp[i] = '\0';
+    if (strncmp(tmp, azerty, strlen(azerty)) == 0)
       ok = true;
   }
   if (ok)
