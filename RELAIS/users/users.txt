@@ -1,0 +1,3 @@
+<utilisateur>:<mot-de-passe>
+<bonjour>:<toto>
+<bonsoir>:<tata>
