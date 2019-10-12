@@ -37,3 +37,22 @@ ssize_t send_toclient(int sockfd, const char *msg, struct sockaddr_in *client)
   }
   return bytes;
 }
+
+bool authentification(FILE *fp, const char *recu, size_t len)
+{
+  char *ligne;
+  char res[N];
+  char tmp[N];
+  while ((ligne = fgets(res,N,fp)) != NULL)
+  {
+    size_t i;
+    for (i = 0; i < strlen(res) && res[i] != '('; i++)
+    {
+      tmp[i] = res[i];
+    }
+    tmp[i] = '\0';
+    if (strncmp(tmp, recu, len) == 0)
+      return true;
+  }
+  return false;
+}
