@@ -41,8 +41,8 @@ ssize_t send_toclient(int sockfd, const char *msg, struct sockaddr_in *client)
 bool authentification(FILE *fp, const char *recu, size_t len)
 {
   char *ligne;
-  char res[N];
-  char tmp[N];
+  char res[N] = "";
+  char tmp[N] = "";
   while ((ligne = fgets(res,N,fp)) != NULL)
   {
     size_t i;
@@ -57,7 +57,7 @@ bool authentification(FILE *fp, const char *recu, size_t len)
   return false;
 }
 
-bool cmd_test(char *recu)
+bool cmd_test(char *recu, FILE *fp, char *user)
 {
   char *tmp;
   char *rest = recu;
@@ -71,7 +71,6 @@ bool cmd_test(char *recu)
   if (strncmp(tmp, "supprimer", 9) == 0)
     acc = 2;
 
-  printf("tmp = %s\n", tmp);
   switch (acc)
   {
     case -1:
@@ -80,7 +79,38 @@ bool cmd_test(char *recu)
     case 0:
       //ICI IL FAUDRA VERIFIER SI L'UTILISATEUR APPARAIT DANS LE FICHIER + LE NOM DE CHAMP QU'IL A ENVOYER POUR VALIDER S'IL A LES DROITS OU PAS
       printf("JE PEUX LIRE HAHA\n");
-      return true;
+      char *ligne;
+      char temp[N] = "";
+      char another[N] = "";
+      char mtru[N] = "";
+      while ((ligne = fgets(temp, N, fp)) != NULL)
+      {
+        size_t i;
+        for (i = 0; i < strlen(temp) && temp[i] != '('; i++)
+        {
+          another[i] = temp[i];
+        }
+        another[i] = '\0';
+        if (strncmp(another, user, strlen(another)) == 0)
+        {
+          size_t j;
+          for (j = i; j <  strlen(temp); j++)
+          {
+            mtru[j-i] = temp[j];
+            printf("%c\n", temp[j]);
+          }
+          mtru[j] = '\0';
+          char *hello = "";
+          hello = strtok_r(rest, " ", &rest);
+          printf("hello = %s\n", hello);
+          if (strncmp(hello, mtru, strlen(mtru)) == 0)
+          {
+            printf("YIIIKES\n");
+            return true;
+          }
+        }
+      }
+      return false;
 
     case 1:
       //ICI IL FAUDRA VERFIER SI LE CLIENT VEUT MODIFIER UN CHAMP LE CONCERNANT

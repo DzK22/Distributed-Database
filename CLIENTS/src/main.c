@@ -73,6 +73,14 @@ int main(int argc, char **argv)
           if (sendtoserveur(sock, buff, &test) == -1)
             return EXIT_FAILURE;
         }
+
+        if (FD_ISSET(sock, &ensemble))
+        {
+          ssize_t bytes = recfromserveur(sock, buff, &serveur);
+          if (bytes == -1)
+            return EXIT_FAILURE;
+          printf("ACCESS = %s\n", buff);
+        }
     }
   }
   return EXIT_SUCCESS;

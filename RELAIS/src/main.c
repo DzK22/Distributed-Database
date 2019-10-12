@@ -18,7 +18,8 @@ int main()
   }
   socklen_t clientaddr = sizeof(struct sockaddr_in);
   int rec;
-  char recu[N];
+  char recu[N] = "";
+  char save[N] = "";
   if ((rec = recvfrom(sock, &recu, N, 0, (struct sockaddr *)&client, &clientaddr)) == -1)
   {
     perror("recvfrom error");
@@ -28,6 +29,8 @@ int main()
   bool user = authentification(fp, recu, strlen(recu));
   if (user)
   {
+    snprintf(save, N, "%s", recu);
+    printf("save = %s\n", save);
     if (send_toclient(sock, "UR WELCOME BRO!", &client) == -1)
       return EXIT_FAILURE;
   }
@@ -35,6 +38,11 @@ int main()
   {
     if (send_toclient(sock, "DENIED!", &client) == -1)
       return EXIT_FAILURE;
+  }
+  if (fclose(fp) == EOF)
+  {
+    perror("fclose error");
+    return EXIT_FAILURE;
   }
   fd_set ensemble;
   struct timeval delai;
@@ -60,11 +68,22 @@ int main()
             perror("recvfrom error");
             return EXIT_FAILURE;
           }
-          if (cmd_test(recu))
+          if ((fp = fopen("users/users.txt", "r")) == NULL)
+          {
+            perror("fopen error");
+            return EXIT_FAILURE;
+          }
+          printf("save encore = %s\n", save);
+          if (cmd_test(recu, fp, save))
             send_toclient(sock, "U CAN DO WHAT YOU WANT", &client);
           else
           {
             printf("TOTO\n");
+            return EXIT_FAILURE;
+          }
+          if (fclose(fp))
+          {
+            perror("fclose error");
             return EXIT_FAILURE;
           }
         }
