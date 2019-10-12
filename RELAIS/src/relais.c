@@ -41,17 +41,20 @@ ssize_t send_toclient(int sockfd, const char *msg, struct sockaddr_in *client)
 bool authentification(FILE *fp, const char *recu, size_t len)
 {
   char *ligne;
-  char res[N] = "";
-  char tmp[N] = "";
+  char res[N];
+  char *another;
+  char *tmp = "";
+  char *tmp2 = "";
+  char total[N] = "";
   while ((ligne = fgets(res,N,fp)) != NULL)
   {
-    size_t i;
-    for (i = 0; i < strlen(res) && res[i] != '('; i++)
-    {
-      tmp[i] = res[i];
-    }
-    tmp[i] = '\0';
-    if (strncmp(tmp, recu, len) == 0)
+    tmp = strtok_r(res, ":", &another);
+    tmp2 = strtok_r(another, ":", &another);
+    snprintf(total, N, "%s:%s", tmp, tmp2);
+    /*printf("tmp = %s\n", tmp);
+    printf("tmp2 = %s\n", tmp2);
+    printf("total = %s\n", total);*/
+    if (strncmp(total, recu, len) == 0)
       return true;
   }
   return false;
@@ -59,8 +62,9 @@ bool authentification(FILE *fp, const char *recu, size_t len)
 
 bool cmd_test(char *recu, FILE *fp, char *user)
 {
-  char *tmp;
-  char *rest = recu;
+  char *tmp = "";
+  char *rest = "";
+  rest = recu;
   int acc = -1;
   tmp = strtok_r(rest, " ", &rest);
 
@@ -81,32 +85,33 @@ bool cmd_test(char *recu, FILE *fp, char *user)
       printf("JE PEUX LIRE HAHA\n");
       char *ligne;
       char temp[N] = "";
-      char another[N] = "";
-      char mtru[N] = "";
+      char *tmp1 = "";
+      char *tmp2 = "";
+      char *another = "";
+      char res[N] = "";
+      char *testa = "";
+      char *recevoir = "";
+      char *cmd = "";
+      cmd = strtok_r(rest, " ", &recevoir);
+      printf("cmd = %s\n", cmd);
       while ((ligne = fgets(temp, N, fp)) != NULL)
       {
-        size_t i;
-        for (i = 0; i < strlen(temp) && temp[i] != '('; i++)
+        tmp1 = strtok_r(temp, ":", &another);
+        tmp2 = strtok_r(another, ":", &another);
+        printf("tmp1 = %s\n", tmp1);
+        printf("tmp2 = %s\n", tmp2);
+        snprintf(res, N, "%s:%s", tmp1, tmp2);
+        printf("res = %s\n\n", res);
+        if (strncmp(res, user, strlen(another)) == 0)
         {
-          another[i] = temp[i];
-        }
-        another[i] = '\0';
-        if (strncmp(another, user, strlen(another)) == 0)
-        {
-          size_t j;
-          for (j = i; j <  strlen(temp); j++)
+          while ((testa = strtok_r(another, ":", &another)) != NULL)
           {
-            mtru[j-i] = temp[j];
-            printf("%c\n", temp[j]);
-          }
-          mtru[j] = '\0';
-          char *hello = "";
-          hello = strtok_r(rest, " ", &rest);
-          printf("hello = %s\n", hello);
-          if (strncmp(hello, mtru, strlen(mtru)) == 0)
-          {
-            printf("YIIIKES\n");
-            return true;
+            printf("testa = %s\n", testa);
+            printf("cmd = %s\n", cmd);
+            if (strncmp(testa, cmd, strlen(testa)) == 0)
+              return true;
+            else
+              return false;
           }
         }
       }

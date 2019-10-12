@@ -77,10 +77,8 @@ int main()
           if (cmd_test(recu, fp, save))
             send_toclient(sock, "U CAN DO WHAT YOU WANT", &client);
           else
-          {
-            printf("TOTO\n");
-            return EXIT_FAILURE;
-          }
+            send_toclient(sock, "IT'S A NOP !", &client);
+            
           if (fclose(fp))
           {
             perror("fclose error");

@@ -24,7 +24,7 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
 
   char buff[N];
-  int ret = snprintf(buff, N, "<%s>:<%s>", argv[1], argv[2]);
+  int ret = snprintf(buff, N, "%s:%s", argv[1], argv[2]);
   if (ret > N || ret < 0)
   {
     fprintf(stderr, "snprintf error\n");
