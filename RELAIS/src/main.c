@@ -36,5 +36,39 @@ int main()
     if (send_toclient(sock, "DENIED!", &client) == -1)
       return EXIT_FAILURE;
   }
+  fd_set ensemble;
+  struct timeval delai;
+  delai.tv_sec = 0;
+  delai.tv_usec = 0;
+  int sel, maxsock = sock+1;
+  while (1)
+  {
+    FD_ZERO(&ensemble);
+    FD_SET(sock, &ensemble);
+    sel = select(maxsock, &ensemble, NULL, NULL, &delai);
+    switch (sel)
+    {
+      case -1:
+        perror("select error");
+        return EXIT_FAILURE;
+
+      default:
+        if (FD_ISSET(sock, &ensemble))
+        {
+          if ((rec = recvfrom(sock, &recu, N, 0, (struct sockaddr *)&client, &clientaddr)) == -1)
+          {
+            perror("recvfrom error");
+            return EXIT_FAILURE;
+          }
+          if (cmd_test(recu))
+            send_toclient(sock, "U CAN DO WHAT YOU WANT", &client);
+          else
+          {
+            printf("TOTO\n");
+            return EXIT_FAILURE;
+          }
+        }
+    }
+  }
   return EXIT_SUCCESS;
 }

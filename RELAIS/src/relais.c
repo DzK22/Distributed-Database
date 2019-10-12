@@ -56,3 +56,44 @@ bool authentification(FILE *fp, const char *recu, size_t len)
   }
   return false;
 }
+
+bool cmd_test(char *recu)
+{
+  char *tmp;
+  char *rest = recu;
+  int acc = -1;
+  tmp = strtok_r(rest, " ", &rest);
+
+  if (strncmp(tmp, "lire", strlen(tmp)) == 0)
+    acc = 0;
+  if (strncmp(tmp, "ecrire", strlen(tmp)) == 0)
+    acc = 1;
+  if (strncmp(tmp, "supprimer", 9) == 0)
+    acc = 2;
+
+  printf("tmp = %s\n", tmp);
+  switch (acc)
+  {
+    case -1:
+      return false;
+
+    case 0:
+      //ICI IL FAUDRA VERIFIER SI L'UTILISATEUR APPARAIT DANS LE FICHIER + LE NOM DE CHAMP QU'IL A ENVOYER POUR VALIDER S'IL A LES DROITS OU PAS
+      printf("JE PEUX LIRE HAHA\n");
+      return true;
+
+    case 1:
+      //ICI IL FAUDRA VERFIER SI LE CLIENT VEUT MODIFIER UN CHAMP LE CONCERNANT
+      printf("JE PEUX ECRIRE QUE SI CEST MOI\n");
+      return true;
+
+    case 2:
+      //ICI ON SUPPRIME TOUS LES CHAMPS RELATIFS A UN UTILISATEUR
+      printf("JE SUPPRIME TOUT HAHA\n");
+      return true;
+
+    default:
+      printf("AUCUN\n");
+      return false;
+  }
+}

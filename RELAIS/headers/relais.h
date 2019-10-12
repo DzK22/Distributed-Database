@@ -15,3 +15,5 @@ int candbind(int sockfd, struct sockaddr_in *addr);
 ssize_t send_toclient(int sockfd, const char *msg, struct sockaddr_in *client);
 
 bool authentification(FILE *fp, const char *recu, size_t len);
+
+bool cmd_test(char *recu);

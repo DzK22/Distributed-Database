@@ -35,6 +35,45 @@ int main(int argc, char **argv)
 
   if (recfromserveur(sock, buff, &serveur) == -1)
     return EXIT_FAILURE;
-  printf("DECISION = %s\n", buff);
+
+  if (strncmp(buff, "DENIED!", 7) == 0)
+  {
+    fprintf(stderr, "UR AUTHENTIFICATION HAS FAILED!\n");
+    return EXIT_FAILURE;
+  }
+  else
+    fprintf(stdout, "CONNEXION ACCEPTED\n");
+
+  fd_set ensemble;
+  struct timeval delai;
+  delai.tv_sec = 0;
+  delai.tv_usec = 0;
+  int sel, maxsock = sock+1;
+  while (1)
+  {
+    FD_ZERO(&ensemble);
+    FD_SET(0, &ensemble);
+    FD_SET(sock, &ensemble);
+    sel = select(maxsock, &ensemble, NULL, NULL, &delai);
+    switch (sel)
+    {
+      case -1:
+        perror("select error");
+        return EXIT_FAILURE;
+
+      default:
+        if (FD_ISSET(0, &ensemble))
+        {
+          ssize_t bytes = read(0, &buff, N);
+          if (bytes == -1)
+          {
+            perror("read error");
+            return EXIT_FAILURE;
+          }
+          if (sendtoserveur(sock, buff, &test) == -1)
+            return EXIT_FAILURE;
+        }
+    }
+  }
   return EXIT_SUCCESS;
 }
