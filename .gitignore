@@ -10,7 +10,7 @@
 # fichiers sans extension à ne pas ignorer
 !Makefile
 !makefile
-!Doxyfile
+!DoxyFile
 
 # exceptions de fichiers avec extension à ignorer
 *.o
