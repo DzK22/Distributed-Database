@@ -1,3 +1,9 @@
+/**
+* \file main.c
+* \brief Main program!
+* \author François et Danyl
+*/
+
 #include "../headers/relais.h"
 
 int main (int argc, char **argv)

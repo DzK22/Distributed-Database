@@ -1,3 +1,9 @@
+/**
+* \file relais.c
+* \brief Définitions des fonctions gérant le serveur d'accès
+* \author François et Danyl
+*/
+
 #include "../headers/relais.h"
 
 int socket_create ()
