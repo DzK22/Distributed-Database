@@ -2,3 +2,4 @@ utilisateur:mot-de-passe:nom-champ
 bonjour:toto:taille
 bonsoir:tata:age
 danyl:c'est_moi:poids
+zorglub:33:prix

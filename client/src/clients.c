@@ -16,11 +16,21 @@ int socket_create ()
     return sock;
 }
 
-void addr_create (struct sockaddr_in *addr, const char *port)
+int addr_create (struct sockaddr_in *addr, const char *ip, const char *port)
 {
     addr->sin_family = AF_INET;
     addr->sin_port = htons(atoi(port));
-    addr->sin_addr.s_addr = INADDR_ANY;
+
+    int res = inet_pton(AF_INET, ip, &addr->sin_addr);
+    if (res == -1) {
+        perror("inet_pton error");
+        return -1;
+    } else if (res == 0) {
+        fprintf(stderr, "inet_pton: src is not an valid ipv4 address\n");
+        return -1;
+    }
+
+    return 0;
 }
 
 ssize_t recfromserveur (const int sockfd, char *msg, struct sockaddr_in *serveur)

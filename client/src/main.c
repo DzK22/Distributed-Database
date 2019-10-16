@@ -8,14 +8,15 @@
 
 int main (int argc, char **argv)
 {
-    if (argc != 4) {
-        fprintf(stderr, "Usage: %s <login> <mdp> <relais_port>\n", argv[0]);
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <relais_ip> <relais_port> <login> <mdp>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
-    const char *login = argv[1];
-    const char *mdp = argv[2];
-    const char *relais_port = argv[3];
+    const char *relais_ip = argv[1];
+    const char *relais_port = argv[2];
+    const char *login = argv[3];
+    const char *mdp = argv[4];
 
     int sock = socket_create();
     if (sock == -1)
@@ -23,10 +24,11 @@ int main (int argc, char **argv)
     printf("socket numéro = %d\n", sock);
 
     struct sockaddr_in test, serveur;
-    addr_create(&test, relais_port);
+    if (addr_create(&test, relais_ip, relais_port) == -1)
+        return EXIT_FAILURE;
 
     char buff[N];
-    int ret = snprintf(buff, N, "%s:%s", login, mdp);
+    int ret = snprintf(buff, N, "auth %s:%s", login, mdp);
     if ((ret > N) || (ret < 0)) {
         fprintf(stderr, "snprintf error\n");
         return EXIT_FAILURE;

@@ -7,6 +7,8 @@
 #ifndef __RELAIS_H__
 #define __RELAIS_H__
 
+#include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdio.h>
@@ -16,6 +18,14 @@
 #include <string.h>
 #include <stdbool.h>
 #define N 1024
+
+enum clientreq_codes {Authentification, Read, Write, Delete};
+typedef struct clientreq {
+    int type;
+    char message[N];
+    struct sockaddr_in saddr;
+} clientreq;
+
 
 /**
 * \fn socket_create().
@@ -45,14 +55,12 @@ int candbind(const int sockfd, struct sockaddr_in *addr, const char *port);
 ssize_t send_toclient(const int sockfd, const char *msg, struct sockaddr_in *client);
 
 /**
-* \fn authentification(FILE *fp, const char *recu, const size_t len).
+* \fn authentification(clientreq *creq).
 * \brief Fonction qui teste si un client fait parti de la liste de clients autorisés à se connecter.
-* \param [in] fp fichier contenant les identitifiants des clients.
-* \param [in] recu login + mdp envoyés par le client.
-* \param [in] len taille du msg (login + mdp) envoyé par le client.
+* \param [in] creq structure de requête client
 * \return booléen (vrai si le client est autorisé à se connecter, faux sinon).
 */
-bool authentification(FILE *fp, const char *recu, const size_t len);
+bool authentification(clientreq *creq);
 
 /**
 * \fn cmd_test(char *recu, FILE *fp, const char *user).
@@ -63,5 +71,29 @@ bool authentification(FILE *fp, const char *recu, const size_t len);
 * \return booléen (vrai si la commande du client est acceptée, faux sinon).
 */
 bool cmd_test(char *recu, FILE *fp, const char *user);
+
+/**
+ * \fn parse_datagram (char *data, clientreq *cr);
+ * \brief Fonction qui parse un datagram UDP et remplie la structure clientreq cr
+ * \param [in] data le datagram UDP
+ * \param [in] cr la structure clientreq
+ * \return 0 si succès, -1 sinon
+ */
+int parse_datagram (char *data, clientreq *cr);
+
+/**
+ * \fn wait_for_request (int sock)
+ * \param [in] sock le socket master
+ * \return 0 si succès, -1 sinon
+ */
+int wait_for_request (int sock);
+
+/** 
+ * \fn exec_client_request (int sock, clientreq *cr)
+ * \param [in] sock le socket master
+ * \param [in] cr la structure clientreq à éxecuter
+ * \return 0 si succès, -1 sinon
+ */
+int exec_client_request (int sock, clientreq *cr);
 
 #endif

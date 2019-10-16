@@ -28,12 +28,14 @@
 int socket_create ();
 
 /**
-* \fn addr_create(struct sockaddr_in *addr).
+* \fn addr_create(struct sockaddr_in *addr const char *ip, cont char *port).
 * \brief Fonction qui initialise une structure sockaddr_in (IP + port).
 * \param [in] addr structure à allouer et initialiser.
-* \param [in] relais_port port du serveur relais
+* \param [in] ip du serveur relais
+* \param [in] port du serveur relais
+* \return 0 si succès, sinon -1
 */
-void addr_create (struct sockaddr_in *addr, const char *relais_port);
+int addr_create (struct sockaddr_in *addr, const char*ip, const char *port);
 
 /**
 * \fn recfromserveur(const int sockfd, char *msg, struct sockaddr_in *serveur).
