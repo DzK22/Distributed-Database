@@ -23,6 +23,14 @@ int main (int argc, char **argv)
     if (candbind(sock, &test, port) == -1)
         return EXIT_FAILURE;
 
+    user *users = init_users();
+    int i, j;
+    for (i = 0; i < 5; i++) {
+        printf("users[%d].login = %s\n users[%d].mdp = %s\n", i, users[i].login, i, users[i].mdp);
+        for (j = 0; j < 4; j++) {
+            printf("users[%d].attributs[%d] = %s\n",i, j, users[i].attributs[j]);
+        }
+    }
     wait_for_request(sock);
     return EXIT_FAILURE;
 }

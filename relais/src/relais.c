@@ -32,7 +32,7 @@ int candbind (const int sockfd, struct sockaddr_in *addr, const char *port)
     return 0;
 }
 
-ssize_t send_toclient (const int sockfd, const char *msg, struct sockaddr_in *client)
+ssize_t send_toclient (const int sockfd, void *msg, struct sockaddr_in *client)
 {
     socklen_t len = sizeof(struct sockaddr_in);
     ssize_t bytes = sendto(sockfd, msg, N, 0, (struct sockaddr *) client, len);
@@ -85,7 +85,7 @@ int wait_for_request (int sock)
                     }
 
                     buff[buff_offset] = '\0';
-                    if (parse_datagram(buff, &creq) == -1)
+                    if (parse_datagram(buff, &creq, &clientaddr) == -1)
                         return -1;
                     if (exec_client_request(sock, &creq) == -1)
                         return -1;
@@ -95,7 +95,7 @@ int wait_for_request (int sock)
     }
 }
 
-int parse_datagram (char *data, clientreq *cr) // data should be null terminated
+int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // data should be null terminated
 {
     char tmp[N];
     errno = 0;
@@ -106,14 +106,14 @@ int parse_datagram (char *data, clientreq *cr) // data should be null terminated
             fprintf(stderr, "cannot assing all sscanf items\n");
         return -1;
     }
-
-    if (strncmp(tmp, "auth", N) == 0)
+    cr->saddr = *client;
+    if (strncmp(tmp, "auth", 5) == 0)
         cr->type = Authentification;
-    else if (strncmp(tmp, "lire", N) == 0)
+    else if (strncmp(tmp, "lire", 5) == 0)
         cr->type = Read;
-    else if (strncmp(tmp, "ecrire", N) == 0)
+    else if (strncmp(tmp, "ecrire", 7) == 0)
         cr->type = Write;
-    else if (strncmp(tmp, "supprimer", N) == 0)
+    else if (strncmp(tmp, "supprimer", 10) == 0)
         cr->type = Delete;
     else {
         fprintf(stderr, "parse_datagram: wrong message type\n");
@@ -129,10 +129,14 @@ int exec_client_request (int sock, clientreq *cr)
     switch (cr->type) {
         case Authentification:
             printf("AUTHENTIFICATION => %s\n", cr->message);
-            if (authentification(cr) == true)
+            if (authentification(cr) == true){
                 printf("success\n");
-            else
+                send_toclient(sock, "0", &cr->saddr);
+            }
+            else{
+                send_toclient(sock, "-1", &cr->saddr);
                 printf("failed\n");
+            }
             break;
         case Read:
             break;
@@ -141,9 +145,9 @@ int exec_client_request (int sock, clientreq *cr)
         case Delete:
             break;
         default:
+            fprintf(stderr, "Requête non reconnue\n");
             return 1;
     }
-
     return 0;
 }
 
@@ -184,6 +188,56 @@ bool authentification (clientreq *creq)
     }
 
     return false;
+}
+
+user *init_users() {
+    FILE *fp = fopen("users.txt", "r");
+    if (fp == NULL) {
+        perror("fopen error");
+        return NULL;
+    }
+    int nb_lines = 0, cpt = 0;
+    char c;
+    while ((c = fgetc(fp)) != EOF) {
+        if (c == '\n' || c == '\r') {
+            if (cpt >= 4)
+                nb_lines++;
+            cpt = 0;
+        }
+        else
+            cpt++;
+    }
+    if (cpt >= 4)
+        nb_lines++;
+
+    user *users = malloc(sizeof(user) * nb_lines);
+    if (users == NULL) {
+        perror("malloc error");
+        return NULL;
+    }
+    int i;
+    char line[N];
+    char login[N], mdp[N];
+    char *tmp;
+    char *attr;
+    printf("nb_lines = %d\n", nb_lines);
+    fseek(fp, 0, SEEK_SET);
+    for (i = 0; i < nb_lines; i++) {
+        fgets(line, N, fp);
+        snprintf(login, N, "%s", strtok_r(line, ":", &tmp));
+        snprintf(mdp, N, "%s", strtok_r(NULL, ":", &tmp));
+        //printf("login = %s\n", login);
+        //printf("mdp = %s\n", mdp);
+        strncpy(users[i].login, login, MAX_ATTR);
+        strncpy(users[i].mdp, mdp, MAX_ATTR);
+        while ((attr = strtok_r(NULL, ":", &tmp)) != NULL) {
+            int j = 0;
+            printf("attr = %s\n", attr);
+            strncpy(users[i].attributs[j], attr,  MAX_ATTR);
+            j++;
+        }
+    }
+    return users;
 }
 
 /*

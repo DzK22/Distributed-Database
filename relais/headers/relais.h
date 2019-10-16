@@ -18,6 +18,7 @@
 #include <string.h>
 #include <stdbool.h>
 #define N 1024
+#define MAX_ATTR 32
 
 enum clientreq_codes {Authentification, Read, Write, Delete};
 typedef struct clientreq {
@@ -26,7 +27,13 @@ typedef struct clientreq {
     struct sockaddr_in saddr;
 } clientreq;
 
+typedef struct user {
+  char login[N];
+  char mdp[N];
+  char attributs[MAX_ATTR][MAX_ATTR];
+} user;
 
+user *init_users();
 /**
 * \fn socket_create().
 * \brief Fonction qui crée un socket.
@@ -52,7 +59,7 @@ int candbind(const int sockfd, struct sockaddr_in *addr, const char *port);
 * \param [in] client informations du client (IP + PORT).
 * \return nombre d'octets envoyés au client.
 */
-ssize_t send_toclient(const int sockfd, const char *msg, struct sockaddr_in *client);
+ssize_t send_toclient(const int sockfd, void *msg, struct sockaddr_in *client);
 
 /**
 * \fn authentification(clientreq *creq).
@@ -79,7 +86,7 @@ bool cmd_test(char *recu, FILE *fp, const char *user);
  * \param [in] cr la structure clientreq
  * \return 0 si succès, -1 sinon
  */
-int parse_datagram (char *data, clientreq *cr);
+int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client);
 
 /**
  * \fn wait_for_request (int sock)
@@ -88,7 +95,7 @@ int parse_datagram (char *data, clientreq *cr);
  */
 int wait_for_request (int sock);
 
-/** 
+/**
  * \fn exec_client_request (int sock, clientreq *cr)
  * \param [in] sock le socket master
  * \param [in] cr la structure clientreq à éxecuter

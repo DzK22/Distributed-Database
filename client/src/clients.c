@@ -33,7 +33,7 @@ int addr_create (struct sockaddr_in *addr, const char *ip, const char *port)
     return 0;
 }
 
-ssize_t recfromserveur (const int sockfd, char *msg, struct sockaddr_in *serveur)
+ssize_t recfromserveur (const int sockfd, void *msg, struct sockaddr_in *serveur)
 {
     ssize_t bytes;
     socklen_t servlen = sizeof(struct sockaddr_in);
@@ -44,7 +44,7 @@ ssize_t recfromserveur (const int sockfd, char *msg, struct sockaddr_in *serveur
     return bytes;
 }
 
-ssize_t sendtoserveur (const int sockfd, const char *msg, struct sockaddr_in *serveur)
+ssize_t sendtoserveur (const int sockfd, void *msg, struct sockaddr_in *serveur)
 {
     ssize_t bytes;
     socklen_t servlen = sizeof(struct sockaddr_in);
