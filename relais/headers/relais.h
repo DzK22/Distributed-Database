@@ -31,6 +31,7 @@ typedef struct user {
   char login[N];
   char mdp[N];
   char attributs[MAX_ATTR][MAX_ATTR];
+  unsigned attributs_len;
 } user;
 
 user *init_users();

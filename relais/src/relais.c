@@ -87,9 +87,9 @@ int wait_for_request (int sock)
                     buff[buff_offset] = '\0';
                     if (parse_datagram(buff, &creq, &clientaddr) == -1)
                         return -1;
+                    buff_offset = 0;
                     if (exec_client_request(sock, &creq) == -1)
                         return -1;
-                    buff_offset = 0;
                 }
         }
     }
@@ -125,15 +125,13 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // da
 
 int exec_client_request (int sock, clientreq *cr)
 {
-    (void) sock;
     switch (cr->type) {
         case Authentification:
             printf("AUTHENTIFICATION => %s\n", cr->message);
-            if (authentification(cr) == true){
+            if (authentification(cr) == true) {
                 printf("success\n");
                 send_toclient(sock, "0", &cr->saddr);
-            }
-            else{
+            } else {
                 send_toclient(sock, "-1", &cr->saddr);
                 printf("failed\n");
             }
@@ -146,7 +144,7 @@ int exec_client_request (int sock, clientreq *cr)
             break;
         default:
             fprintf(stderr, "Requête non reconnue\n");
-            return 1;
+            return -1;
     }
     return 0;
 }
@@ -190,52 +188,63 @@ bool authentification (clientreq *creq)
     return false;
 }
 
-user *init_users() {
+user * init_users () 
+{
     FILE *fp = fopen("users.txt", "r");
     if (fp == NULL) {
         perror("fopen error");
         return NULL;
     }
+
     int nb_lines = 0, cpt = 0;
     char c;
     while ((c = fgetc(fp)) != EOF) {
-        if (c == '\n' || c == '\r') {
+        if ((c == '\n') || (c == '\r')) {
             if (cpt >= 4)
-                nb_lines++;
+                nb_lines ++;
             cpt = 0;
-        }
-        else
-            cpt++;
+        } else
+            cpt ++;
     }
     if (cpt >= 4)
-        nb_lines++;
+        nb_lines ++;
 
     user *users = malloc(sizeof(user) * nb_lines);
     if (users == NULL) {
         perror("malloc error");
         return NULL;
     }
+
     int i;
     char line[N];
-    char login[N], mdp[N];
     char *tmp;
-    char *attr;
+    char *str;
     printf("nb_lines = %d\n", nb_lines);
     fseek(fp, 0, SEEK_SET);
-    for (i = 0; i < nb_lines; i++) {
+
+    for (i = 0; i < nb_lines; i ++) {
         fgets(line, N, fp);
-        snprintf(login, N, "%s", strtok_r(line, ":", &tmp));
-        snprintf(mdp, N, "%s", strtok_r(NULL, ":", &tmp));
+        str = strtok_r(line, ":", &tmp); // login
+        strncpy(users[i].login, str, MAX_ATTR);
+        str = strtok_r(NULL, ":", &tmp); // psswd
+        strncpy(users[i].mdp, str, MAX_ATTR);
         //printf("login = %s\n", login);
         //printf("mdp = %s\n", mdp);
-        strncpy(users[i].login, login, MAX_ATTR);
-        strncpy(users[i].mdp, mdp, MAX_ATTR);
-        while ((attr = strtok_r(NULL, ":", &tmp)) != NULL) {
-            int j = 0;
-            printf("attr = %s\n", attr);
-            strncpy(users[i].attributs[j], attr,  MAX_ATTR);
-            j++;
+
+        unsigned j = 0;
+        while ((str = strtok_r(NULL, ":", &tmp)) != NULL) {
+            printf("attr = %s\n", str);
+            strncpy(users[i].attributs[j], str,  MAX_ATTR);
+            j ++;
         }
+
+        users[i].attributs_len = j;
+        yo ma couil
+    }
+
+    if (fclose(fp) == EOF) {
+        perror("fclose error");
+        return NULL;
     }
     return users;
 }
