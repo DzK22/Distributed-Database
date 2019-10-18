@@ -19,8 +19,10 @@
 #include <stdbool.h>
 #define N 1024
 #define MAX_ATTR 32
+#define H 32
 
 enum clientreq_codes {Authentification, Read, Write, Delete};
+
 typedef struct clientreq {
     int type;
     char message[N];
@@ -31,10 +33,30 @@ typedef struct user {
   char login[N];
   char mdp[N];
   char attributs[MAX_ATTR][MAX_ATTR];
-  unsigned attributs_len;
+  size_t attributs_len;
 } user;
 
-user *init_users();
+typedef struct auth_user
+{
+  struct in_addr ip;
+  uint16_t port;
+  char login[H];
+} auth_user;
+
+typedef struct mugiwara
+{
+  user *users;        //tableah de tous les utilisateurs (fichier chargé)
+  size_t nb_users;    //nombre d'utilisateurs stockés dans le fichier chargé
+  auth_user *hosts;   //tableau des clients actuellement connectés
+  size_t nb_hosts;    //clients actuellement connectés
+  size_t max_hosts;   //max de clients pouvant se connecter
+} mugiwara;
+
+bool test_auth(mugiwara *mugi, const char *log1);
+
+bool read_req(clientreq *creq, mugiwara *mugi);
+
+mugiwara *init_mugiwara ();
 /**
 * \fn socket_create().
 * \brief Fonction qui crée un socket.
@@ -68,7 +90,7 @@ ssize_t send_toclient(const int sockfd, void *msg, struct sockaddr_in *client);
 * \param [in] creq structure de requête client
 * \return booléen (vrai si le client est autorisé à se connecter, faux sinon).
 */
-bool authentification(clientreq *creq);
+bool authentification (clientreq *creq, mugiwara *mugi);
 
 /**
 * \fn cmd_test(char *recu, FILE *fp, const char *user).
@@ -94,7 +116,7 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client);
  * \param [in] sock le socket master
  * \return 0 si succès, -1 sinon
  */
-int wait_for_request (int sock);
+int wait_for_request (int sock, mugiwara *mugi);
 
 /**
  * \fn exec_client_request (int sock, clientreq *cr)
@@ -102,6 +124,6 @@ int wait_for_request (int sock);
  * \param [in] cr la structure clientreq à éxecuter
  * \return 0 si succès, -1 sinon
  */
-int exec_client_request (int sock, clientreq *cr);
+int exec_client_request (int sock, clientreq *cr, mugiwara *mugi);
 
 #endif

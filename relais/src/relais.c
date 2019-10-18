@@ -43,7 +43,7 @@ ssize_t send_toclient (const int sockfd, void *msg, struct sockaddr_in *client)
     return bytes;
 }
 
-int wait_for_request (int sock)
+int wait_for_request (int sock, mugiwara *mugi)
 {
     fd_set ensemble;
     struct timeval delai;
@@ -88,7 +88,7 @@ int wait_for_request (int sock)
                     if (parse_datagram(buff, &creq, &clientaddr) == -1)
                         return -1;
                     buff_offset = 0;
-                    if (exec_client_request(sock, &creq) == -1)
+                    if (exec_client_request(sock, &creq, mugi) == -1)
                         return -1;
                 }
         }
@@ -97,6 +97,9 @@ int wait_for_request (int sock)
 
 int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // data should be null terminated
 {
+    char buff[N];
+    inet_ntop(AF_INET, client, buff, 16);
+    printf("IP = %s and port = %d\n", buff, ntohs(client->sin_port));
     char tmp[N];
     errno = 0;
     if (sscanf(data, "%s %s;", tmp, cr->message) != 2) {
@@ -119,17 +122,21 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // da
         fprintf(stderr, "parse_datagram: wrong message type\n");
         return -1;
     }
-
     return 0;
 }
 
-int exec_client_request (int sock, clientreq *cr)
+int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
 {
+    static int z = 0;
     switch (cr->type) {
         case Authentification:
             printf("AUTHENTIFICATION => %s\n", cr->message);
-            if (authentification(cr) == true) {
-                printf("success\n");
+            if (authentification(cr, mugi) == true) {
+                //printf("success\n");
+                printf("mugi->hosts[%d].login = %s\n", z, mugi->hosts[z].login);
+                printf("mugi->hosts[%d].port = %d\n", z, mugi->hosts[z].port);
+                printf("mugi->hosts[%d].ip = %s\n", z, inet_ntoa(mugi->hosts[z].ip));
+                z++;
                 send_toclient(sock, "0", &cr->saddr);
             } else {
                 send_toclient(sock, "-1", &cr->saddr);
@@ -149,7 +156,14 @@ int exec_client_request (int sock, clientreq *cr)
     return 0;
 }
 
-bool authentification (clientreq *creq)
+/*bool read_req(clientreq *creq, mugiwara *mugi)
+{
+  char *tmp;
+  const char *cmd = strtok_r(creq->message, ",", &tmp);
+
+}*/
+
+bool authentification (clientreq *creq, mugiwara *mugi)
 {
     char *tmp;
     const char *login = strtok_r(creq->message, ":", &tmp);
@@ -158,37 +172,61 @@ bool authentification (clientreq *creq)
         fprintf(stderr, "Authentification error: login or password is missing\n");
         return false;
     }
-
-    FILE *users = fopen("users.txt", "r");
-    if (users == NULL) {
-        perror("fopen error");
-        return false;
-    }
-
-    size_t login_len = strlen(login);
-    size_t password_len = strlen(password);
-    char line[N];
     char *flogin, *fpassword;
     bool login_ok, password_ok;
-    while (fgets(line, N, users) != NULL)
+    size_t i;
+    for (i = 0; i < mugi->nb_users; i++)
     {
-        flogin = strtok_r(line, ":", &tmp);
-        fpassword = strtok_r(NULL, ":", &tmp);
-        login_ok = strncmp(flogin, login, login_len) == 0;
-        password_ok = strncmp(fpassword, password, password_len) == 0;
-        if (login_ok && password_ok)
-            return true;
-    }
+      flogin = mugi->users[i].login;
+      fpassword = mugi->users[i].mdp;
+      login_ok = strncmp(flogin, login, strlen(flogin)) == 0;
+      password_ok = strncmp(fpassword, password, strlen(fpassword)) == 0;
+      if (login_ok && password_ok)
+      {
+        if (test_auth(mugi, login))
+          return false;
 
-    if (fclose(users) == EOF) {
-        perror("fclose error");
-        return false;
+        if (mugi->nb_hosts == 0)
+        {
+          mugi->hosts = malloc(sizeof(auth_user) * H);
+          if (mugi->hosts == NULL)
+          {
+            perror("malloc error");
+            return EXIT_FAILURE;
+          }
+        }
+        if (mugi->nb_hosts >= mugi->max_hosts)
+        {
+          mugi->max_hosts = mugi->nb_hosts+H;
+          mugi->hosts = realloc(mugi->hosts, mugi->max_hosts);
+          if (mugi->hosts == NULL)
+          {
+            perror("realloc error");
+            return EXIT_FAILURE;
+          }
+        }
+        strncpy(mugi->hosts[mugi->nb_hosts].login, login, strlen(login));
+        mugi->hosts[mugi->nb_hosts].ip = creq->saddr.sin_addr;
+        mugi->hosts[mugi->nb_hosts].port = creq->saddr.sin_port;
+        mugi->nb_hosts++;
+        return true;
+      }
     }
-
     return false;
 }
 
-user * init_users () 
+bool test_auth(mugiwara *mugi, const char *log)
+{
+  size_t i;
+  for (i = 0; i < mugi->nb_hosts; i++)
+  {
+    if (strncmp(log, mugi->hosts[i].login, strlen(log)) == 0)
+      return true;
+  }
+  return false;
+}
+
+mugiwara *init_mugiwara ()
 {
     FILE *fp = fopen("users.txt", "r");
     if (fp == NULL) {
@@ -200,53 +238,59 @@ user * init_users ()
     char c;
     while ((c = fgetc(fp)) != EOF) {
         if ((c == '\n') || (c == '\r')) {
-            if (cpt >= 4)
+            if (cpt >= 3)
                 nb_lines ++;
             cpt = 0;
         } else
             cpt ++;
     }
-    if (cpt >= 4)
+    if (cpt >= 3)
         nb_lines ++;
 
-    user *users = malloc(sizeof(user) * nb_lines);
-    if (users == NULL) {
+    mugiwara *mugi = malloc(sizeof(mugiwara));
+    if (mugi == NULL) {
         perror("malloc error");
         return NULL;
     }
-
+    mugi->users = malloc(sizeof(user) * nb_lines);
+    if (mugi->users == NULL)
+    {
+      perror("malloc error");
+      return NULL;
+    }
+    mugi->nb_users = nb_lines;
+    mugi->nb_hosts = 0;
+    mugi->max_hosts = H;
     int i;
     char line[N];
     char *tmp;
     char *str;
-    printf("nb_lines = %d\n", nb_lines);
     fseek(fp, 0, SEEK_SET);
 
     for (i = 0; i < nb_lines; i ++) {
         fgets(line, N, fp);
         str = strtok_r(line, ":", &tmp); // login
-        strncpy(users[i].login, str, MAX_ATTR);
+        strncpy(mugi->users[i].login, str, MAX_ATTR);
         str = strtok_r(NULL, ":", &tmp); // psswd
-        strncpy(users[i].mdp, str, MAX_ATTR);
+        strncpy(mugi->users[i].mdp, str, MAX_ATTR);
         //printf("login = %s\n", login);
         //printf("mdp = %s\n", mdp);
 
         unsigned j = 0;
         while ((str = strtok_r(NULL, ":", &tmp)) != NULL) {
-            printf("attr = %s\n", str);
-            strncpy(users[i].attributs[j], str,  MAX_ATTR);
+            //printf("attr = %s\n", str);
+            strncpy(mugi->users[i].attributs[j], str,  MAX_ATTR);
             j ++;
         }
 
-        users[i].attributs_len = j;
-        yo ma couil
+        mugi->users[i].attributs_len = j;
     }
 
     if (fclose(fp) == EOF) {
         perror("fclose error");
         return NULL;
     }
-    return users;
+    return mugi;
 }
 
 /*
