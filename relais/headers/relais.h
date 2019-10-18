@@ -43,6 +43,11 @@ typedef struct auth_user
   char login[H];
 } auth_user;
 
+/**
+ * \struct mugiwara
+ * \brief Fichier de permission chargé par le SA
+ *
+ */
 typedef struct mugiwara
 {
   user *users;        //tableah de tous les utilisateurs (fichier chargé)
@@ -52,10 +57,22 @@ typedef struct mugiwara
   size_t max_hosts;   //max de clients pouvant se connecter
 } mugiwara;
 
-bool test_auth(mugiwara *mugi, const char *log1);
+/**
+* \fn test_auth(mugiwara *mugi, const char *log1).
+* \brief Fonction qui teste si log est déjà authentifié.
+* \param [in] mugi structure mugiwara (fichier chargé au début par le SA).
+* \param [in] log login a testé.
+* \return vrai (si oui), faux (sinon).
+*/
+bool test_auth(mugiwara *mugi, const char *log);
 
 bool read_req(clientreq *creq, mugiwara *mugi);
 
+/**
+* \fn init_mugiwara ().
+* \brief Fonction qui crée une structure mugiwara.
+* \return pointeur sur la structure mugiwara.
+*/
 mugiwara *init_mugiwara ();
 /**
 * \fn socket_create().
@@ -114,6 +131,7 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client);
 /**
  * \fn wait_for_request (int sock)
  * \param [in] sock le socket master
+ * \param [in] mugi structure mugiwara (contenant les données du fichier chargé par le SA).
  * \return 0 si succès, -1 sinon
  */
 int wait_for_request (int sock, mugiwara *mugi);
@@ -122,6 +140,7 @@ int wait_for_request (int sock, mugiwara *mugi);
  * \fn exec_client_request (int sock, clientreq *cr)
  * \param [in] sock le socket master
  * \param [in] cr la structure clientreq à éxecuter
+ * \param [in] mugi structure mugiwara (contenant les données du fichier chargé par le SA).
  * \return 0 si succès, -1 sinon
  */
 int exec_client_request (int sock, clientreq *cr, mugiwara *mugi);

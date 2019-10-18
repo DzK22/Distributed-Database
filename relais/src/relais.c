@@ -99,7 +99,7 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // da
 {
     char buff[N];
     inet_ntop(AF_INET, client, buff, 16);
-    printf("IP = %s and port = %d\n", buff, ntohs(client->sin_port));
+    //printf("IP = %s and port = %d\n", buff, ntohs(client->sin_port));
     char tmp[N];
     errno = 0;
     if (sscanf(data, "%s %s;", tmp, cr->message) != 2) {
@@ -127,16 +127,16 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // da
 
 int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
 {
-    static int z = 0;
+    //static int z = 0;
     switch (cr->type) {
         case Authentification:
             printf("AUTHENTIFICATION => %s\n", cr->message);
-            if (authentification(cr, mugi) == true) {
+            if (authentification(cr, mugi)) {
                 //printf("success\n");
-                printf("mugi->hosts[%d].login = %s\n", z, mugi->hosts[z].login);
+                /*printf("mugi->hosts[%d].login = %s\n", z, mugi->hosts[z].login);
                 printf("mugi->hosts[%d].port = %d\n", z, mugi->hosts[z].port);
-                printf("mugi->hosts[%d].ip = %s\n", z, inet_ntoa(mugi->hosts[z].ip));
-                z++;
+                printf("mugi->hosts[%d].ip = %s\n", z, inet_ntoa(mugi->hosts[z].ip));*/
+                //z++;
                 send_toclient(sock, "0", &cr->saddr);
             } else {
                 send_toclient(sock, "-1", &cr->saddr);
@@ -144,6 +144,10 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
             }
             break;
         case Read:
+            if (read_req(cr, mugi))
+              printf("U can\n");
+            else
+              printf("fuck\n");
             break;
         case Write:
             break;
@@ -156,12 +160,60 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
     return 0;
 }
 
-/*bool read_req(clientreq *creq, mugiwara *mugi)
+bool read_req(clientreq *creq, mugiwara *mugi)
 {
   char *tmp;
-  const char *cmd = strtok_r(creq->message, ",", &tmp);
-
-}*/
+  char *hello;
+  strtok_r(creq->message, " ", &tmp);
+  char test[N];
+  size_t i;
+  const char *req = inet_ntop(AF_INET, &creq->saddr, test, N);
+  uint16_t req_p = creq->saddr.sin_port;
+  //printf("tmp = %s\n", creq->message);
+  int cpt = 0;
+  int total = 1;
+  for (i = 0; i < mugi->nb_hosts; i++)
+  {
+    const char *another = inet_ntop(AF_INET, &mugi->hosts[i].ip, test, N);
+    printf("req = %s\n", req);
+    printf("another = %s\n", another);
+    int to_test = strncmp(another, req, strlen(req));
+    if ((to_test == 0) && (mugi->hosts[i].port == req_p))
+    {
+      size_t j;
+      hello = creq->message;
+      tmp = strtok_r(hello, ",", &hello);
+      for (j = 0; j < mugi->nb_users; j++)
+      {
+        printf("users = %s\n", mugi->users[j].login);
+        printf("hosts = %s\n",  mugi->hosts[i].login);
+        if (strncmp(mugi->hosts[i].login, mugi->users[j].login, strlen(mugi->users[j].login)) == 0)
+        {
+          total = mugi->users[j].attributs_len;
+          printf("tmp = %s\n", tmp);
+          size_t z;
+          for (z = 0; z < mugi->users[j].attributs_len; z++)
+          {
+            if (strncmp(mugi->users[j].attributs[z], tmp, strlen(mugi->users[j].attributs[z])) == 0)
+            {
+              cpt++;
+              break;
+            }
+            else
+              break;
+          }
+          break;
+        }
+        else
+          printf("FUCK\n");
+      }
+    }
+  }
+  printf("cpt = %d\ntotal = %d\n", cpt, total);
+  if (cpt != 0)
+    return true;
+  return false;
+}
 
 bool authentification (clientreq *creq, mugiwara *mugi)
 {
