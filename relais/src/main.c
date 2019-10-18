@@ -23,6 +23,7 @@ int main (int argc, char **argv)
     if (candbind(sock, &test, port) == -1)
         return EXIT_FAILURE;
 
-    wait_for_request(sock);
+    mugiwara *mugi = init_mugiwara();
+    wait_for_request(sock, mugi);
     return EXIT_FAILURE;
 }
