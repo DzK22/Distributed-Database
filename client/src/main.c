@@ -39,18 +39,13 @@ int main (int argc, char **argv)
     if (recfromserveur(sock, buff, &serveur) == -1)
         return EXIT_FAILURE;
 
-    int code = atoi(buff);
-    printf("code = %d\n", code);
-    switch (code)
-    {
-      case 0:
-        printf(CODE_0);
-        break;
-
-      case -1:
-        printf(CODE_N1);
+    if (strncmp(buff, "DENIED!", 7) == 0) {
+        fprintf(stderr, "UR AUTHENTIFICATION HAS FAILED!\n");
         return EXIT_FAILURE;
     }
+    else
+        fprintf(stdout, "CONNEXION ACCEPTED\n");
+
     fd_set ensemble;
     struct timeval delai;
     delai.tv_sec = 600;

@@ -18,8 +18,7 @@
 #include <unistd.h>
 #include <string.h>
 #define N 1024
-#define CODE_0 "AUTHENTIFICATION SUCCESS\n"
-#define CODE_N1 "AUTHENTIFICATION HAS FAILED\n"
+#define LEN sizeof(struct sockaddr_in)
 
 /**
 * \fn socket_create().
@@ -46,7 +45,7 @@ int addr_create (struct sockaddr_in *addr, const char*ip, const char *port);
 * \param [in] serveur infos du serveur (IP + port).
 * \return nombres d'octets reçus.
 */
-ssize_t recfromserveur (const int sockfd, void *msg, struct sockaddr_in *serveur);
+ssize_t recfromserveur (const int sockfd, char *msg, struct sockaddr_in *serveur);
 
 /**
 * \fn sendtoserveur(const int sockfd, const char *msg, struct sockaddr_in *serveur).
@@ -56,6 +55,6 @@ ssize_t recfromserveur (const int sockfd, void *msg, struct sockaddr_in *serveur
 * \param [in] serveur infos du serveur (IP + port).
 * \return nombres d'octets envoyés.
 */
-ssize_t sendtoserveur (const int sockfd, void *msg, struct sockaddr_in *serveur);
+ssize_t sendtoserveur (const int sockfd, const char *msg, struct sockaddr_in *serveur);
 
 #endif

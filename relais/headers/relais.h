@@ -18,62 +18,15 @@
 #include <string.h>
 #include <stdbool.h>
 #define N 1024
-#define MAX_ATTR 32
-#define H 32
 
 enum clientreq_codes {Authentification, Read, Write, Delete};
-
 typedef struct clientreq {
     int type;
     char message[N];
     struct sockaddr_in saddr;
 } clientreq;
 
-typedef struct user {
-  char login[N];
-  char mdp[N];
-  char attributs[MAX_ATTR][MAX_ATTR];
-  size_t attributs_len;
-} user;
 
-typedef struct auth_user
-{
-  struct in_addr ip;
-  uint16_t port;
-  char login[H];
-} auth_user;
-
-/**
- * \struct mugiwara
- * \brief Fichier de permission chargé par le SA
- *
- */
-typedef struct mugiwara
-{
-  user *users;        //tableah de tous les utilisateurs (fichier chargé)
-  size_t nb_users;    //nombre d'utilisateurs stockés dans le fichier chargé
-  auth_user *hosts;   //tableau des clients actuellement connectés
-  size_t nb_hosts;    //clients actuellement connectés
-  size_t max_hosts;   //max de clients pouvant se connecter
-} mugiwara;
-
-/**
-* \fn test_auth(mugiwara *mugi, const char *log1).
-* \brief Fonction qui teste si log est déjà authentifié.
-* \param [in] mugi structure mugiwara (fichier chargé au début par le SA).
-* \param [in] log login a testé.
-* \return vrai (si oui), faux (sinon).
-*/
-bool test_auth(mugiwara *mugi, const char *log);
-
-bool read_req(clientreq *creq, mugiwara *mugi);
-
-/**
-* \fn init_mugiwara ().
-* \brief Fonction qui crée une structure mugiwara.
-* \return pointeur sur la structure mugiwara.
-*/
-mugiwara *init_mugiwara ();
 /**
 * \fn socket_create().
 * \brief Fonction qui crée un socket.
@@ -99,7 +52,7 @@ int candbind(const int sockfd, struct sockaddr_in *addr, const char *port);
 * \param [in] client informations du client (IP + PORT).
 * \return nombre d'octets envoyés au client.
 */
-ssize_t send_toclient(const int sockfd, void *msg, struct sockaddr_in *client);
+ssize_t send_toclient(const int sockfd, const char *msg, struct sockaddr_in *client);
 
 /**
 * \fn authentification(clientreq *creq).
@@ -107,7 +60,7 @@ ssize_t send_toclient(const int sockfd, void *msg, struct sockaddr_in *client);
 * \param [in] creq structure de requête client
 * \return booléen (vrai si le client est autorisé à se connecter, faux sinon).
 */
-bool authentification (clientreq *creq, mugiwara *mugi);
+bool authentification(clientreq *creq);
 
 /**
 * \fn cmd_test(char *recu, FILE *fp, const char *user).
@@ -126,23 +79,21 @@ bool cmd_test(char *recu, FILE *fp, const char *user);
  * \param [in] cr la structure clientreq
  * \return 0 si succès, -1 sinon
  */
-int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client);
+int parse_datagram (char *data, clientreq *cr);
 
 /**
  * \fn wait_for_request (int sock)
  * \param [in] sock le socket master
- * \param [in] mugi structure mugiwara (contenant les données du fichier chargé par le SA).
  * \return 0 si succès, -1 sinon
  */
-int wait_for_request (int sock, mugiwara *mugi);
+int wait_for_request (int sock);
 
-/**
+/** 
  * \fn exec_client_request (int sock, clientreq *cr)
  * \param [in] sock le socket master
  * \param [in] cr la structure clientreq à éxecuter
- * \param [in] mugi structure mugiwara (contenant les données du fichier chargé par le SA).
  * \return 0 si succès, -1 sinon
  */
-int exec_client_request (int sock, clientreq *cr, mugiwara *mugi);
+int exec_client_request (int sock, clientreq *cr);
 
 #endif
