@@ -77,8 +77,8 @@ ssize_t recv_from_relais (const int sock, char *buf, const size_t buf_max, struc
     while ((bytes = recvfrom(sock, buf + total, buf_max - total, MSG_DONTWAIT, (struct sockaddr *) sender_saddr, &sender_saddr_len)) > 0)
         total += bytes;
 
-    if (bytes == -1) {
-        perror("recvfrom error");
+    if ((bytes == -1) && (errno != EAGAIN) && (errno != EWOULDBLOCK)) {
+        perror("recvfrom");
         return -1;
     }
 
@@ -94,24 +94,19 @@ int meet_relais (const node_data *ndata)
         return -1;
     }
 
-    bool relais_confirmed = false;
-    while (!relais_confirmed) {
-        if (send_to_relais(ndata->sock, str, strlen(str)) == -1)
-            return -1;
+    if (send_to_relais(ndata->sock, str, strlen(str)) == -1)
+        return -1;
 
-        struct sockaddr_in saddr_sender;
-        if (recv_from_relais(ndata->sock, str, MESS_MAX - 1, &saddr_sender) == -1)
-            return -1;
-        str[strlen(str)] = '\0';
-
-        // check if the message came from the relais server or not
-        if ((saddr_sender.sin_addr.s_addr != ndata->saddr_relais.sin_addr.s_addr) || (saddr_sender.sin_port != ndata->saddr_relais.sin_port)) {
-            if (send_to_relais(ndata->sock, "1", 1) == -1)
-                return -1;
-        } else
-            relais_confirmed = true;
+    ssize_t bytes;
+    if ((bytes = recv(ndata->sock, str, MESS_MAX - 1, 0)) == -1)
+        return -1;
+    str[bytes] = '\0';
+    if (strncmp(str, "success;", 9) != 0) {
+        printf("MEET_RELAIS FAILED: WRONG RESPONSE MESSAGE FROM RELAIS: %s\n", str);
+        return -1;
     }
 
+    printf("MEET SUCCESS\n");
     return 0;
 }
 
@@ -138,13 +133,13 @@ void wait_for_request (const node_data *ndata)
                if ((bytes = recv_from_relais(ndata->sock, buf, MESS_MAX - 1, &sender_saddr)) == -1)
                    return;
 
-               if ((sender_saddr.sin_addr.s_addr != ndata->saddr_relais.sin_addr.s_addr) || (sender_saddr.sin_port != ndata->saddr_relais.sin_port))
-                   continue; // sender is not the relais server !
-
                buf[bytes] = '\0';
-               if (parse_datagram(buf, &rreq) == -1) {
-                   if (send_to_relais(ndata->sock, "2", 1) == -1)
+               switch (parse_datagram(buf, &rreq)) {
+                   case -1:
                        return;
+                    case 1:
+                       // skip
+                       break;
                }
 
                if (exec_relais_request(ndata, &rreq) == -1)
@@ -157,12 +152,14 @@ int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null termin
 {
     char tmp[MESS_MAX];
     errno = 0;
-    if (sscanf(buf, "%s %s;", tmp, rreq->args) != 1) {
-        if (errno != 0)
+    if (sscanf(buf, "%s %s;", tmp, rreq->args) != 2) {
+        if (errno != 0) {
             perror("sscanf");
-        else
-            fprintf(stderr, "parse_datagram: cannot assign all items\n");
-        return -1;
+            return -1;
+        }
+        // else
+        fprintf(stderr, "parse_datagram: cannot assign all items: %s\n", buf);
+        return 1;
     }
 
     if (strncmp(tmp, "lire", 5) == 0)
@@ -171,6 +168,10 @@ int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null termin
         rreq->type = Write;
     else if (strncmp(tmp, "delete", 7) == 0)
         rreq->type = Delete;
+    else if (strncmp(tmp, "getall", 7) == 0)
+        rreq->type = Getall;
+    else if (strncmp(tmp, "changeall", 10) == 0)
+        rreq->type = Changeall;
     else {
         fprintf(stderr, "parse_datagram: wrong message type\n");
         return -1;
@@ -196,6 +197,15 @@ int exec_relais_request (const node_data *ndata, relaisreq *rreq)
             printf("DELETE: %s\n", rreq->args);
             if (node_delete(ndata, rreq->args) == -1)
                 return -1;
+            break;
+        case Changeall:
+            printf("CHANGE ALL, new data: %s\n", rreq->args);
+            if (change_all_data(ndata, rreq->args) == -1)
+                return -1;
+            break;
+        case Getall:
+            printf("GET ALL\n");
+                // if get_all_data ...
             break;
         default:
             return -1;
@@ -268,6 +278,27 @@ int node_delete (const node_data *ndata, const char *args) // args must be null 
 {
     (void) ndata;
     (void) args;
+
+    return 0;
+}
+
+int change_all_data (const node_data *ndata, const char *new_data) // args must be null terminated
+{
+    FILE *datafile = fopen(ndata->datafile, "w");
+    if (datafile == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    if (fputs(new_data, datafile) == EOF) {
+        perror("fputs");
+        return -1;
+    }
+
+    if (fclose(datafile) == EOF) {
+        perror("fclose");
+        return -1;
+    }
 
     return 0;
 }

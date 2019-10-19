@@ -21,7 +21,8 @@
 #define MAX_ATTR 32
 #define H 32
 
-enum clientreq_codes {Authentification, Read, Write, Delete};
+enum message_types {Authentification, Read, Write, Delete, Meet, Getallres};
+// auth, read, write, delete, meet in raw
 
 typedef struct clientreq {
     int type;
@@ -36,25 +37,36 @@ typedef struct user {
   size_t attributs_len;
 } user;
 
-typedef struct auth_user
-{
+typedef struct auth_user {
   struct in_addr ip;
   uint16_t port;
   char login[H];
 } auth_user;
 
+typedef struct node {
+    struct sockaddr_in saddr;
+    char field[MAX_ATTR];
+    unsigned id; // identifiant unique
+    bool active; // mettre a false pour ne rien demander a ce serveur
+} node;
+
 /**
  * \struct mugiwara
- * \brief Fichier de permission chargé par le SA
- *
+ * \brief Structure contenant les utilisateurs (fichier), les clients actuellment connectés et les noeuds de données.
  */
 typedef struct mugiwara
 {
-  user *users;        //tableah de tous les utilisateurs (fichier chargé)
-  size_t nb_users;    //nombre d'utilisateurs stockés dans le fichier chargé
-  auth_user *hosts;   //tableau des clients actuellement connectés
-  size_t nb_hosts;    //clients actuellement connectés
-  size_t max_hosts;   //max de clients pouvant se connecter
+  user *users;        // tableau de tous les utilisateurs (fichier chargé)
+  size_t nb_users;    // nombre d'utilisateurs stockés dans le fichier chargé
+
+  auth_user *hosts;   // tableau des clients actuellement connectés
+  size_t nb_hosts;    // clients actuellement connectés
+  size_t max_hosts;   // max de clients pouvant se connecter
+
+  node *nodes;        // tableau des noeuds connus
+  size_t nb_nodes;    // nombre de noeuds actuels
+  size_t max_nodes;   // max de noeuds
+  unsigned node_id_counter;
 } mugiwara;
 
 /**
@@ -64,9 +76,9 @@ typedef struct mugiwara
 * \param [in] log login a testé.
 * \return vrai (si oui), faux (sinon).
 */
-bool test_auth(mugiwara *mugi, const char *log);
+bool test_auth (mugiwara *mugi, const char *log);
 
-bool read_req(clientreq *creq, mugiwara *mugi);
+bool read_has_rights (clientreq *creq, mugiwara *mugi);
 
 /**
 * \fn init_mugiwara ().
@@ -89,7 +101,7 @@ int socket_create();
 * \param [in] port port pour la structure à initialiser.
 * \return int.
 */
-int candbind(const int sockfd, struct sockaddr_in *addr, const char *port);
+int candbind (const int sockfd, struct sockaddr_in *addr, const char *port);
 
 /**
 * \fn send_toclient(const int sockfd, const char *msg, struct sockaddr_in *client).
@@ -99,7 +111,7 @@ int candbind(const int sockfd, struct sockaddr_in *addr, const char *port);
 * \param [in] client informations du client (IP + PORT).
 * \return nombre d'octets envoyés au client.
 */
-ssize_t send_toclient(const int sockfd, void *msg, struct sockaddr_in *client);
+ssize_t send_toclient (const int sockfd, void *msg, struct sockaddr_in *client);
 
 /**
 * \fn authentification(clientreq *creq).
@@ -144,5 +156,9 @@ int wait_for_request (int sock, mugiwara *mugi);
  * \return 0 si succès, -1 sinon
  */
 int exec_client_request (int sock, clientreq *cr, mugiwara *mugi);
+
+int meet_new_node (const int sock, clientreq *creq, mugiwara *mugi);
+
+int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi);
 
 #endif

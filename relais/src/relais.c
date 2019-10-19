@@ -1,8 +1,8 @@
 /**
-* \file relais.c
-* \brief Définitions des fonctions gérant le serveur d'accès
-* \author François et Danyl
-*/
+ * \file relais.c
+ * \brief Définitions des fonctions gérant le serveur d'accès
+ * \author François et Danyl
+ */
 
 
 #include "../headers/relais.h"
@@ -57,8 +57,7 @@ int wait_for_request (int sock, mugiwara *mugi)
     unsigned buff_offset = 0;
     clientreq creq;
 
-    while (true)
-    {
+    while (true) {
         FD_ZERO(&ensemble);
         FD_SET(sock, &ensemble);
         sel = select(maxsock, &ensemble, NULL, NULL, &delai);
@@ -85,8 +84,16 @@ int wait_for_request (int sock, mugiwara *mugi)
                     }
 
                     buff[buff_offset] = '\0';
-                    if (parse_datagram(buff, &creq, &clientaddr) == -1)
-                        return -1;
+                    int parse_res;
+                    switch (parse_res = parse_datagram(buff, &creq, &clientaddr)) {
+                        case -1: // program error
+                            return -1;
+                        case 1: // wrong formatted datagram
+                            continue;
+                        case 2: // wrong message type
+                            continue;
+                    }
+
                     buff_offset = 0;
                     if (exec_client_request(sock, &creq, mugi) == -1)
                         return -1;
@@ -103,11 +110,13 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // da
     char tmp[N];
     errno = 0;
     if (sscanf(data, "%s %s;", tmp, cr->message) != 2) {
-        if (errno != 0)
+        if (errno != 0) {
             perror("sscanf error");
-        else
-            fprintf(stderr, "cannot assing all sscanf items\n");
-        return -1;
+            return -1;
+        }
+        // else
+        fprintf(stderr, "cannot assing all sscanf items: %s\n", data);
+        return 1; // don't quit the program
     }
     cr->saddr = *client;
     if (strncmp(tmp, "auth", 5) == 0)
@@ -118,10 +127,16 @@ int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // da
         cr->type = Write;
     else if (strncmp(tmp, "supprimer", 10) == 0)
         cr->type = Delete;
+    else if (strncmp(tmp, "meet", 5) == 0)
+        cr->type = Meet; // REQUETE D'UN NOUVEAU NOEUD, PAS D'UN CLIENT !
+    else if (strncmp(tmp, "getallres", 10) == 0)
+        cr->type = Getallres; // IDEM
     else {
-        fprintf(stderr, "parse_datagram: wrong message type\n");
-        return -1;
+        printf("message avec mauvais type recu\n");
+        return 2;
     }
+
+
     return 0;
 }
 
@@ -134,8 +149,8 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
             if (authentification(cr, mugi)) {
                 //printf("success\n");
                 /*printf("mugi->hosts[%d].login = %s\n", z, mugi->hosts[z].login);
-                printf("mugi->hosts[%d].port = %d\n", z, mugi->hosts[z].port);
-                printf("mugi->hosts[%d].ip = %s\n", z, inet_ntoa(mugi->hosts[z].ip));*/
+                  printf("mugi->hosts[%d].port = %d\n", z, mugi->hosts[z].port);
+                  printf("mugi->hosts[%d].ip = %s\n", z, inet_ntoa(mugi->hosts[z].ip));*/
                 //z++;
                 send_toclient(sock, "0", &cr->saddr);
             } else {
@@ -144,14 +159,22 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
             }
             break;
         case Read:
-            if (read_req(cr, mugi))
-              printf("U can\n");
+            if (read_has_rights(cr, mugi))
+                printf("U can\n");
             else
-              printf("fuck\n");
+                printf("fuck\n");
             break;
         case Write:
             break;
         case Delete:
+            break;
+        case Meet: // REQUETE D'UN NOEUD, PAS D'UN CLIENT
+            if (meet_new_node(sock, cr, mugi) == -1)
+                return -1;
+            break;
+        case Getallres: // IDEM
+            if (follow_getallres(sock, cr, mugi) == -1)
+                return -1;
             break;
         default:
             fprintf(stderr, "Requête non reconnue\n");
@@ -160,59 +183,59 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
     return 0;
 }
 
-bool read_req(clientreq *creq, mugiwara *mugi)
+bool read_has_rights (clientreq *creq, mugiwara *mugi)
 {
-  char *tmp;
-  char *hello;
-  strtok_r(creq->message, " ", &tmp);
-  char test[N];
-  size_t i;
-  const char *req = inet_ntop(AF_INET, &creq->saddr, test, N);
-  uint16_t req_p = creq->saddr.sin_port;
-  //printf("tmp = %s\n", creq->message);
-  int cpt = 0;
-  int total = 1;
-  for (i = 0; i < mugi->nb_hosts; i++)
-  {
-    const char *another = inet_ntop(AF_INET, &mugi->hosts[i].ip, test, N);
-    printf("req = %s\n", req);
-    printf("another = %s\n", another);
-    int to_test = strncmp(another, req, strlen(req));
-    if ((to_test == 0) && (mugi->hosts[i].port == req_p))
+    char *tmp;
+    char *hello;
+    strtok_r(creq->message, " ", &tmp);
+    char test[N];
+    size_t i;
+    const char *req = inet_ntop(AF_INET, &creq->saddr, test, N);
+    uint16_t req_p = creq->saddr.sin_port;
+    //printf("tmp = %s\n", creq->message);
+    int cpt = 0;
+    int total = 1;
+    for (i = 0; i < mugi->nb_hosts; i ++)
     {
-      size_t j;
-      hello = creq->message;
-      tmp = strtok_r(hello, ",", &hello);
-      for (j = 0; j < mugi->nb_users; j++)
-      {
-        printf("users = %s\n", mugi->users[j].login);
-        printf("hosts = %s\n",  mugi->hosts[i].login);
-        if (strncmp(mugi->hosts[i].login, mugi->users[j].login, strlen(mugi->users[j].login)) == 0)
+        const char *another = inet_ntop(AF_INET, &mugi->hosts[i].ip, test, N);
+        printf("req = %s\n", req);
+        printf("another = %s\n", another);
+        int to_test = strncmp(another, req, strlen(req));
+        if ((to_test == 0) && (mugi->hosts[i].port == req_p))
         {
-          total = mugi->users[j].attributs_len;
-          printf("tmp = %s\n", tmp);
-          size_t z;
-          for (z = 0; z < mugi->users[j].attributs_len; z++)
-          {
-            if (strncmp(mugi->users[j].attributs[z], tmp, strlen(mugi->users[j].attributs[z])) == 0)
+            size_t j;
+            hello = creq->message;
+            tmp = strtok_r(hello, ",", &hello);
+            for (j = 0; j < mugi->nb_users; j++)
             {
-              cpt++;
-              break;
+                printf("users = %s\n", mugi->users[j].login);
+                printf("hosts = %s\n",  mugi->hosts[i].login);
+                if (strncmp(mugi->hosts[i].login, mugi->users[j].login, strlen(mugi->users[j].login)) == 0)
+                {
+                    total = mugi->users[j].attributs_len;
+                    printf("tmp = %s\n", tmp);
+                    size_t z;
+                    for (z = 0; z < mugi->users[j].attributs_len; z++)
+                    {
+                        if (strncmp(mugi->users[j].attributs[z], tmp, strlen(mugi->users[j].attributs[z])) == 0)
+                        {
+                            cpt++;
+                            break;
+                        }
+                        else
+                            break;
+                    }
+                    break;
+                }
+                else
+                    printf("FUCK\n");
             }
-            else
-              break;
-          }
-          break;
         }
-        else
-          printf("FUCK\n");
-      }
     }
-  }
-  printf("cpt = %d\ntotal = %d\n", cpt, total);
-  if (cpt != 0)
-    return true;
-  return false;
+    printf("cpt = %d\ntotal = %d\n", cpt, total);
+    if (cpt != 0)
+        return true;
+    return false;
 }
 
 bool authentification (clientreq *creq, mugiwara *mugi)
@@ -229,53 +252,53 @@ bool authentification (clientreq *creq, mugiwara *mugi)
     size_t i;
     for (i = 0; i < mugi->nb_users; i++)
     {
-      flogin = mugi->users[i].login;
-      fpassword = mugi->users[i].mdp;
-      login_ok = strncmp(flogin, login, strlen(flogin)) == 0;
-      password_ok = strncmp(fpassword, password, strlen(fpassword)) == 0;
-      if (login_ok && password_ok)
-      {
-        if (test_auth(mugi, login))
-          return false;
+        flogin = mugi->users[i].login;
+        fpassword = mugi->users[i].mdp;
+        login_ok = strncmp(flogin, login, strlen(flogin)) == 0;
+        password_ok = strncmp(fpassword, password, strlen(fpassword)) == 0;
+        if (login_ok && password_ok)
+        {
+            if (test_auth(mugi, login))
+                return false;
 
-        if (mugi->nb_hosts == 0)
-        {
-          mugi->hosts = malloc(sizeof(auth_user) * H);
-          if (mugi->hosts == NULL)
-          {
-            perror("malloc error");
-            return EXIT_FAILURE;
-          }
+            if (mugi->nb_hosts == 0)
+            {
+                mugi->hosts = malloc(sizeof(auth_user) * H);
+                if (mugi->hosts == NULL)
+                {
+                    perror("malloc error");
+                    return EXIT_FAILURE;
+                }
+            }
+            if (mugi->nb_hosts >= mugi->max_hosts)
+            {
+                mugi->max_hosts = mugi->nb_hosts+H;
+                mugi->hosts = realloc(mugi->hosts, mugi->max_hosts);
+                if (mugi->hosts == NULL)
+                {
+                    perror("realloc error");
+                    return EXIT_FAILURE;
+                }
+            }
+            strncpy(mugi->hosts[mugi->nb_hosts].login, login, strlen(login));
+            mugi->hosts[mugi->nb_hosts].ip = creq->saddr.sin_addr;
+            mugi->hosts[mugi->nb_hosts].port = creq->saddr.sin_port;
+            mugi->nb_hosts++;
+            return true;
         }
-        if (mugi->nb_hosts >= mugi->max_hosts)
-        {
-          mugi->max_hosts = mugi->nb_hosts+H;
-          mugi->hosts = realloc(mugi->hosts, mugi->max_hosts);
-          if (mugi->hosts == NULL)
-          {
-            perror("realloc error");
-            return EXIT_FAILURE;
-          }
-        }
-        strncpy(mugi->hosts[mugi->nb_hosts].login, login, strlen(login));
-        mugi->hosts[mugi->nb_hosts].ip = creq->saddr.sin_addr;
-        mugi->hosts[mugi->nb_hosts].port = creq->saddr.sin_port;
-        mugi->nb_hosts++;
-        return true;
-      }
     }
     return false;
 }
 
 bool test_auth(mugiwara *mugi, const char *log)
 {
-  size_t i;
-  for (i = 0; i < mugi->nb_hosts; i++)
-  {
-    if (strncmp(log, mugi->hosts[i].login, strlen(log)) == 0)
-      return true;
-  }
-  return false;
+    size_t i;
+    for (i = 0; i < mugi->nb_hosts; i++)
+    {
+        if (strncmp(log, mugi->hosts[i].login, strlen(log)) == 0)
+            return true;
+    }
+    return false;
 }
 
 mugiwara *init_mugiwara ()
@@ -307,8 +330,8 @@ mugiwara *init_mugiwara ()
     mugi->users = malloc(sizeof(user) * nb_lines);
     if (mugi->users == NULL)
     {
-      perror("malloc error");
-      return NULL;
+        perror("malloc error");
+        return NULL;
     }
     mugi->nb_users = nb_lines;
     mugi->nb_hosts = 0;
@@ -342,78 +365,101 @@ mugiwara *init_mugiwara ()
         perror("fclose error");
         return NULL;
     }
+
+    // init nodes
+    mugi->nb_nodes = 0;
+    mugi->max_nodes = H;
+    mugi->node_id_counter = 0;
+    mugi->nodes = malloc(sizeof(node) * H);
+    if (mugi->nodes == NULL) {
+        perror("malloc");
+        return NULL;
+    }
+
     return mugi;
 }
 
-/*
-bool cmd_test(char *rest, FILE *fp, const char *user)
+int meet_new_node (const int sock, clientreq *creq, mugiwara *mugi)
 {
-    char *tmp = "";
-    int acc = -1;
-    tmp = strtok_r(rest, " ", &rest);
+    // send confirmation
+    char confstr[N] = "success;";
+    if (send_toclient(sock, confstr, &creq->saddr) == -1)
+        return -1;
 
-    if (strncmp(tmp, "lire", strlen(tmp)) == 0)
-        acc = 0;
-    else if (strncmp(tmp, "ecrire", strlen(tmp)) == 0)
-        acc = 1;
-    else if (strncmp(tmp, "supprimer", 9) == 0)
-        acc = 2;
-
-    switch (acc)
-    {
-        case -1:
-            return false;
-
-        case 0:
-            //ICI IL FAUDRA VERIFIER SI L'UTILISATEUR APPARAIT DANS LE FICHIER + LE NOM DE CHAMP QU'IL A ENVOYER POUR VALIDER S'IL A LES DROITS OU PAS
-            printf("JE PEUX LIRE HAHA\n");
-            char *ligne;
-            char temp[N] = "";
-            char *tmp1 = "";
-            char *tmp2 = "";
-            char *another = "";
-            char res[N] = "";
-            char *testa = "";
-            char *recevoir = "";
-            char *cmd = "";
-            cmd = strtok_r(rest, " ", &recevoir);
-            printf("cmd = %s\n", cmd);
-            while ((ligne = fgets(temp, N, fp)) != NULL)
-            {
-                tmp1 = strtok_r(temp, ":", &another);
-                tmp2 = strtok_r(another, ":", &another);
-                printf("tmp1 = %s\n", tmp1);
-                printf("tmp2 = %s\n", tmp2);
-                snprintf(res, N, "%s:%s", tmp1, tmp2);
-                printf("res = %s\n\n", res);
-                if (strncmp(res, user, strlen(another)) == 0)
-                {
-                    while ((testa = strtok_r(another, ":", &another)) != NULL)
-                    {
-                        printf("testa = %s\n", testa);
-                        printf("cmd = %s\n", cmd);
-                        if (strncmp(testa, cmd, strlen(testa)) == 0)
-                            return true;
-                        else
-                            return false;
-                    }
-                }
-            }
-            return false;
-
-        case 1:
-            //ICI IL FAUDRA VERFIER SI LE CLIENT VEUT MODIFIER UN CHAMP LE CONCERNANT
-            printf("JE PEUX ECRIRE QUE SI CEST MOI\n");
-            return true;
-
-        case 2:
-            //ICI ON SUPPRIME TOUS LES CHAMPS RELATIFS A UN UTILISATEUR
-            printf("JE SUPPRIME TOUT HAHA\n");
-            return true;
-
-        default:
-            printf("AUCUN\n");
-            return false;
+    if (mugi->nb_nodes >= mugi->max_nodes) {
+        mugi->max_nodes += H;
+        mugi->nodes = realloc(mugi->nodes, sizeof(node) * mugi->max_nodes);
+        if (mugi->nodes == NULL) {
+            perror("realloc");
+            return -1;
+        }
     }
+
+    // ajouter le noeud
+    strcpy(mugi->nodes[mugi->nb_nodes].field, creq->message);
+    mugi->nodes[mugi->nb_nodes].saddr = creq->saddr;
+    mugi->nodes[mugi->nb_nodes].id = mugi->node_id_counter;
+    mugi->nodes[mugi->nb_nodes].active = true;
+    mugi->nb_nodes ++;
+    mugi->node_id_counter ++;
+
+    // si un noeud du meme type existe deja, ecraser les données du nouveau noeud par les siennes (surement plus à jour) envoie message a ce noeud pour lui demander toutes ses donnees
+    unsigned i;
+    for (i = 0; i < (mugi->nb_nodes - 1); i ++) {
+        if (strcmp(creq->message, mugi->nodes[i].field) == 0) {
+            // bloquer temporairement le noeud car n'a pas les données a jour
+            mugi->nodes[mugi->nb_nodes - 1].active = false;
+            char msg[N];
+            if (sprintf(msg, "getall %u;", mugi->node_id_counter - 1) < 0) {
+                fprintf(stderr, "sprintf error\n");
+                return -1;
+            }
+
+            if (send_toclient(sock, msg, &mugi->nodes[i].saddr) == -1)
+                return -1;
+        }
+    }
+
+    return 0;
 }
-*/
+
+int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi)
+{
+    // message de creq = id_node:data;
+    unsigned to_id;
+    char data[N];
+    switch (sscanf(creq->message, "%u:%s;", &to_id, data)) {
+        case EOF:
+            perror("sscanf");
+            return -1;
+        case 2: // no problem
+            break;
+        default: // problem, mais ne pas quitter le prog => 0
+            fprintf(stderr, "follow_getallres: sscanf, cannot assign all items\n");
+            return 0;
+    }
+
+    // envoyer les nouvelles données au noeud qui a l'id "to_id"
+    char msg[N];
+    int res;
+    res = snprintf(msg, N, "changeall %s;", data);
+    if (res >= N) {
+        fprintf(stderr, "sprintf error\n");
+        return -1;
+    } else if (res < 0) {
+        perror("snprintf");
+        return -1;
+    }
+
+    size_t i;
+    for (i = 0; i < mugi->nb_nodes; i ++) {
+        if (mugi->nodes[i].id == to_id) {
+            if (send_toclient(sock, msg, &mugi->nodes[i].saddr) == -1)
+                return -1;
+            break;
+        }
+    }
+
+    return 0;
+}
+

@@ -25,7 +25,7 @@
  * (3) le noeud ne possède pas le champ demandé
  */
 
-enum relaisreq_types {Read, Write, Delete};
+enum relaisreq_types {Read, Write, Delete, Changeall, Getall};
 typedef struct relaisreq {
     int type;
     char args[ARGS_MAX];
@@ -63,5 +63,7 @@ int node_read (const node_data *ndata, const char *args);
 int node_write (const node_data *ndata, const char *args);
 
 int node_delete (const node_data *ndata, const char *args);
+
+int change_all_data (const node_data *ndata, const char *new_data);
 
 #endif
