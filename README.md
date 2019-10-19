@@ -20,24 +20,24 @@ Ce projet a été développé sous Licence GNU-GPL3.0
 
 Ce projet est composé de 3 modules: le programme client, le relais, et le noeud. Il suffit de compiler chaque module séparemment en exécutant:
 
-`bash
+```bash
 make
-`
+```
 
 Pour la mise en marche, il faut démarrer une instance du serveur relais, puis des noeuds, puis enfin des clients.
 
 **Serveur relais:** 
-`bash
+```bash
 ./main <port>
-`
+```
 
 **Noeud de données:**
-`bash
+```bash
 ./main <relais_ip> <relais_port> <champ stocké> <fichier_données>
-`
+```
 
 **Client:**
-`bash
+```bash
 ./main <relais_ip> <relais_port> <login> <mdp>
-`
+```
 
