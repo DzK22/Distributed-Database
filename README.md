@@ -4,7 +4,7 @@ Ce projet a été développé pour le cours de Réseaux S5 de l'UFR Math Info à
 
 **Banque de données distribuée avec notions de respect de la qualité privée des données et tolérante aux pannes.**
 
-Pour voir l'énoncé complet, cliquez [ici](enonce.pdf)
+Pour voir l'énoncé complet, cliquez [ici](enonce.pdf).
 
 ![Architecture du projet](schema.png)
 
@@ -14,11 +14,11 @@ Danyl El-Kabir et François Grabenstaetter
 
 # Licence
 
-Ce projet a été développé sous Licence GNU-GPL3.0
+Ce projet a été développé sous Licence GNU-GPLv3
 
 # Utilisation
 
-Ce projet est composé de 3 modules: le programme client, le relais, et le noeud. Il suffit de compiler chaque module séparemment en exécutant:
+Ce projet est composé de 3 modules: le programme client, le relais, et le noeud. Il suffit de compiler chaque module séparemment en exécutant depuis le répertoire du module:
 
 ```bash
 make
@@ -33,7 +33,7 @@ Pour la mise en marche, il faut démarrer une instance du serveur relais, puis d
 
 **Noeud de données:**
 ```bash
-./main <relais_ip> <relais_port> <champ stocké> <fichier_données>
+./main <relais_ip> <relais_port> <champ_stocké> <fichier_données>
 ```
 
 **Client:**
