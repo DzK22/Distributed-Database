@@ -4,9 +4,9 @@ Ce projet a été développé pour le cours de Réseaux S5 de l'UFR Math Info à
 
 **Banque de données distribuée avec notions de respect de la qualité privée des données et tolérante aux pannes.**
 
-Pour voir l'énoncé complet, cliquez [ici] (./enonce.pdf)
+Pour voir l'énoncé complet, cliquez [ici] (https://gitlab.com/fgrabenstaetter/projet-reseaux/raw/master/enonce.pdf)
 
-![Architecture du projet][./schema.png]
+![Architecture du projet][https://gitlab.com/fgrabenstaetter/projet-reseaux/raw/master/schema.png]
 
 # Auteurs
 
