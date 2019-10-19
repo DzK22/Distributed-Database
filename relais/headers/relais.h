@@ -21,7 +21,7 @@
 #define MAX_ATTR 32
 #define H 32
 
-enum message_types {Authentification, Read, Write, Delete, Meet, Getallres};
+enum message_types {Authentification, Read, Write, Delete, Meet, Getallres, Readres};
 // auth, read, write, delete, meet in raw
 
 typedef struct clientreq {
@@ -38,8 +38,7 @@ typedef struct user {
 } user;
 
 typedef struct auth_user {
-  struct in_addr ip;
-  uint16_t port;
+  struct sockaddr_in saddr;
   char login[H];
 } auth_user;
 
@@ -78,7 +77,7 @@ typedef struct mugiwara
 */
 bool test_auth (mugiwara *mugi, const char *log);
 
-bool read_has_rights (clientreq *creq, mugiwara *mugi);
+user * read_has_rights (clientreq *creq, mugiwara *mugi);
 
 /**
 * \fn init_mugiwara ().
@@ -160,5 +159,13 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi);
 int meet_new_node (const int sock, clientreq *creq, mugiwara *mugi);
 
 int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi);
+
+user * get_user_from_req (clientreq *creq, mugiwara *mugi);
+
+auth_user * get_auth_user_from_login (const char *login, mugiwara *mugi);
+
+int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr);
+
+int follow_readres (const int sock, clientreq *creq, mugiwara *mugi);
 
 #endif

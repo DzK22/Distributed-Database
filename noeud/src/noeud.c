@@ -59,6 +59,7 @@ int send_to_relais (const int sock, const char *buf, const size_t buf_len)
 {
     ssize_t bytes;
     size_t total = 0;
+    printf("aller on send\n");
     while ((bytes = send(sock, buf + total, buf_len - total, 0)) > 0)
         total += bytes;
     if (bytes == -1) {
@@ -74,10 +75,10 @@ ssize_t recv_from_relais (const int sock, char *buf, const size_t buf_max, struc
     socklen_t sender_saddr_len = sizeof(struct sockaddr_in);
     ssize_t bytes;
     size_t total = 0;
-    while ((bytes = recvfrom(sock, buf + total, buf_max - total, MSG_DONTWAIT, (struct sockaddr *) sender_saddr, &sender_saddr_len)) > 0)
+    while ((bytes = recvfrom(sock, buf + total, buf_max - total, 0, (struct sockaddr *) sender_saddr, &sender_saddr_len)) > 0)
         total += bytes;
 
-    if ((bytes == -1) && (errno != EAGAIN) && (errno != EWOULDBLOCK)) {
+    if (bytes == -1) {
         perror("recvfrom");
         return -1;
     }
@@ -88,8 +89,8 @@ ssize_t recv_from_relais (const int sock, char *buf, const size_t buf_max, struc
 int meet_relais (const node_data *ndata)
 {
     char str[MESS_MAX];
-    int tmp = snprintf(str, FIELD_MAX, "meet %s;", ndata->field);
-    if ((tmp >= FIELD_MAX) || (tmp < 0)) {
+    int tmp = snprintf(str, MESS_MAX, "meet %s;", ndata->field);
+    if ((tmp >= MESS_MAX) || (tmp < 0)) {
         fprintf(stderr, "sprintf error\n");
         return -1;
     }
@@ -112,40 +113,26 @@ int meet_relais (const node_data *ndata)
 
 void wait_for_request (const node_data *ndata)
 {
-    fd_set rset;
     char buf[MESS_MAX];
     ssize_t bytes;
     struct sockaddr_in sender_saddr;
     relaisreq rreq;
 
-    while (true) {
-        FD_ZERO(&rset);
-        FD_SET(ndata->sock, &rset);
+    while ((bytes = recv_from_relais(ndata->sock, buf, MESS_MAX - 1, &sender_saddr)) > 0) {
 
-        switch(select(ndata->sock + 1, &rset, NULL, NULL, NULL)) {
+        buf[bytes] = '\0';
+        switch (parse_datagram(buf, &rreq)) {
             case -1:
-                perror("select");
                 return;
-            case 0:
-                fprintf(stderr, "Timeout reached\n");
-                return;
-            default:
-               if ((bytes = recv_from_relais(ndata->sock, buf, MESS_MAX - 1, &sender_saddr)) == -1)
-                   return;
-
-               buf[bytes] = '\0';
-               switch (parse_datagram(buf, &rreq)) {
-                   case -1:
-                       return;
-                    case 1:
-                       // skip
-                       break;
-               }
-
-               if (exec_relais_request(ndata, &rreq) == -1)
-                   return;
+            case 1:
+                // skip
+                break;
         }
+
+        if (exec_relais_request(ndata, &rreq) == -1)
+            return;
     }
+    // if here, there is a problem
 }
 
 int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null terminated
@@ -162,9 +149,9 @@ int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null termin
         return 1;
     }
 
-    if (strncmp(tmp, "lire", 5) == 0)
+    if (strncmp(tmp, "read", 5) == 0)
         rreq->type = Read;
-    else if (strncmp(tmp, "ecrire", 7) == 0)
+    else if (strncmp(tmp, "write", 7) == 0)
         rreq->type = Write;
     else if (strncmp(tmp, "delete", 7) == 0)
         rreq->type = Delete;
@@ -217,11 +204,26 @@ int exec_relais_request (const node_data *ndata, relaisreq *rreq)
 int node_read (const node_data *ndata, const char *args) // args must be null terminated
 {
     // args ne peut être que un seul champ ! (c'est au relais de split les champs vers les divers noeuds)
+    // /!/ args = <username>:<field>;
+
+    printf("NODE READ\n");
+    
+    char *username, *field, *tmp;
+    username = strtok_r((char *) args, ":", &tmp);
+    if (username == NULL) {
+        perror("strtok_r");
+        return -1;
+    }
+    field = strtok_r(NULL, ":", &tmp);
+    if (field == NULL) {
+        perror("strtok_r");
+        return -1;
+    }
 
     // verifions que ce noeud possède bien le champs
-    if (strcmp(args, ndata->field) != 0) {
+    if (strcmp(field, ndata->field) != 0) {
         send_to_relais(ndata->sock, "3", 1);
-        return 0;
+        return 1;
     }
 
     FILE *datafile = fopen(ndata->datafile, "r");
@@ -236,17 +238,17 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
         perror("malloc");
         return -1;
     }
-    char response[MESS_MAX];
+    char data[MESS_MAX];
     size_t len;
     size_t n = DATAFILE_LINE_MAX;
 
     errno = 0;
     while ((bytes = getline(&line, &n, datafile)) != -1) {
-        len = strlen(response);
-        strncat(response, line, MESS_MAX - len -1);
+        len = strlen(data);
+        strncat(data, line, MESS_MAX - len -1);
         if (len >= MESS_MAX)
             break;
-        strncat(response, ",", MESS_MAX - len - 1);
+        strncat(data, ",", MESS_MAX - len - 1);
     }
 
     free(line);
@@ -260,7 +262,18 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
         return -1;
     }
 
-    if (send_to_relais(ndata->sock, response, strlen(response)) == -1)
+    char msg[MESS_MAX];
+    int val;
+    val = snprintf(msg, MESS_MAX, "readres %s:%s;", username, data);
+    if (val >= MESS_MAX) {
+        fprintf(stderr, "snprintf truncate\n");
+        return 1;
+    } else if (val < 0) {
+        perror("snprintf");
+        return -1;
+    }
+
+    if (send_to_relais(ndata->sock, msg, val) == -1)
         return -1;
 
     return 0;
