@@ -205,6 +205,7 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
         printf("attr = %s\n", attr);
         for (i = 0; i < usr->attributs_len; i ++) {
             printf("usr = %s\n", usr->attributs[i]);
+            attr_len = (strlen(usr->attributs[i]) > strlen(attr)) ? strlen(usr->attributs[i]) : strlen(attr);
             if (strncmp(attr, usr->attributs[i], attr_len) == 0) {
                 found = true;
                 break;
@@ -326,6 +327,7 @@ mugiwara *init_mugiwara ()
 
     for (i = 0; i < nb_lines; i ++) {
         fgets(line, N, fp);
+        line[strlen(line) - 1] = '\0';
         str = strtok_r(line, ":", &tmp); // login
         strncpy(mugi->users[i].login, str, MAX_ATTR);
         str = strtok_r(NULL, ":", &tmp); // psswd
