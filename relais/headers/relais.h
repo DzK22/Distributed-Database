@@ -78,6 +78,10 @@ typedef struct mugiwara
 */
 bool test_auth (mugiwara *mugi, const char *log);
 
+int node_write_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr);
+
+user *write_has_rights(clientreq *creq, mugiwara *mugi);
+
 user * read_has_rights (clientreq *creq, mugiwara *mugi);
 
 /**

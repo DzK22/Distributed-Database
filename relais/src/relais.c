@@ -128,6 +128,11 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
                 return -1;
             break;
         case Write:
+            usr = write_has_rights(cr, mugi);
+            if (usr == NULL)
+                return 1;
+            if (node_write_request(sock, cr, mugi, usr) == -1)
+                return -1;
             break;
         case Delete:
             break;
@@ -187,6 +192,17 @@ user * get_user_from_req (clientreq *creq, mugiwara *mugi)
     return NULL;
 }
 
+user *write_has_rights(clientreq *creq, mugiwara *mugi)
+{
+  user *usr = get_user_from_req(creq, mugi);
+  if (!usr)
+  {
+    fprintf(stderr, "ERROR\n");
+    return NULL;
+  }
+  return usr;
+}
+
 user * read_has_rights (clientreq *creq, mugiwara *mugi)
 {
     user *usr = get_user_from_req(creq, mugi);
@@ -202,9 +218,9 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
     while (attr != NULL) {
         attr_len = strlen(attr) + 1; // with \0
         found = false;
-        printf("attr = %s\n", attr);
+        //printf("attr = %s\n", attr);
         for (i = 0; i < usr->attributs_len; i ++) {
-            printf("usr = %s\n", usr->attributs[i]);
+            //printf("usr = %s\n", usr->attributs[i]);
             attr_len = (strlen(usr->attributs[i]) > strlen(attr)) ? strlen(usr->attributs[i]) : strlen(attr);
             if (strncmp(attr, usr->attributs[i], attr_len) == 0) {
                 found = true;
@@ -323,7 +339,11 @@ mugiwara *init_mugiwara ()
     char line[N];
     char *tmp;
     char *str;
-    fseek(fp, 0, SEEK_SET);
+    if (fseek(fp, 0, SEEK_SET) == -1)
+    {
+      perror("fseek error");
+      return NULL;
+    }
 
     for (i = 0; i < nb_lines; i ++) {
         fgets(line, N, fp);
@@ -449,6 +469,44 @@ int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi)
     return 0;
 }
 
+int node_write_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
+{
+  size_t i;
+  char *tmp, *field, buff[N], *other, *another;
+  int val;
+
+  field = strtok_r(creq->message, ",", &tmp);
+  //printf("field début = %s\n", field);
+  while (field != NULL)
+  {
+    //printf("nodefield = %s\n", mugi->nodes[i].field);
+    //printf("field = %s\n", field);
+    for (i = 0; i < mugi->nb_nodes; i++)
+    {
+      another = strtok_r(field, ":", &other);
+      if (strncmp(another, mugi->nodes[i].field, strlen(another) != 0))
+        continue;
+      if (!mugi->nodes[i].active)
+        continue;
+      //printf("another = %s AND other = %s\n", another, other);
+      val = snprintf(buff, N, "write %s:%s;", usr->login, other);
+      if (val >= N || val < 0)
+      {
+        fprintf(stderr, "snprintf error");
+        return -1;
+      }
+      buff[val] = '\0';
+      if (send_toclient(sock, buff, &mugi->nodes[i].saddr) == -1)
+          return -1;
+      printf("WRITE REQ = %s\n", buff);
+      return 0;
+    }
+    field = strtok_r(NULL, ",", &tmp);
+  }
+  printf("THERE IS NO NODE FOR THAT FIELD\n");
+  return 1;
+}
+
 int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
 {
     // recherche d'un noeud valide pour chaque champ de la reqûete
@@ -477,7 +535,7 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
             buf[val] = '\0';
             if (send_toclient(sock, buf, &mugi->nodes[i].saddr) == -1)
                 return -1;
-            printf("READ REQ SEND TO NODE\n");
+            printf("READ REQ SEND TO NODE = %s\n", buf);
             return 0;
         }
 

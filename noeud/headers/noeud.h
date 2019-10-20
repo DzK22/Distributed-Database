@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <errno.h>
 
+#define N 1024
 #define ARGS_MAX 16
 #define MESS_MAX 1024
 #define FIELD_MAX 32
@@ -28,6 +29,7 @@
  */
 
 enum relaisreq_types {Read, Write, Delete, Changeall, Getall};
+
 typedef struct relaisreq {
     int type;
     char args[ARGS_MAX];

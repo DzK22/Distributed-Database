@@ -61,7 +61,10 @@ int send_to_relais (const int sock, const char *buf, const size_t buf_len)
     size_t total = 0;
     printf("aller on send\n");
     while ((bytes = send(sock, buf + total, buf_len - total, 0)) > 0)
-        total += bytes;
+    {
+      total += bytes;
+      printf("send = %s\n", buf);
+    }
     if (bytes == -1) {
         perror("send error");
         return -1;
@@ -74,16 +77,12 @@ ssize_t recv_from_relais (const int sock, char *buf, const size_t buf_max, struc
 {
     socklen_t sender_saddr_len = sizeof(struct sockaddr_in);
     ssize_t bytes;
-    size_t total = 0;
-    while ((bytes = recvfrom(sock, buf + total, buf_max - total, 0, (struct sockaddr *) sender_saddr, &sender_saddr_len)) > 0)
-        total += bytes;
-
-    if (bytes == -1) {
-        perror("recvfrom");
-        return -1;
+    if ((bytes = recvfrom(sock, buf, buf_max , 0, (struct sockaddr *) sender_saddr, &sender_saddr_len)) == -1)
+    {
+      perror("recvfrom");
+      return -1;
     }
-
-    return total;
+    return bytes;
 }
 
 int meet_relais (const node_data *ndata)
@@ -119,7 +118,7 @@ void wait_for_request (const node_data *ndata)
     relaisreq rreq;
 
     while ((bytes = recv_from_relais(ndata->sock, buf, MESS_MAX - 1, &sender_saddr)) > 0) {
-
+        printf("ndata->sock = %s\n", buf);
         buf[bytes] = '\0';
         switch (parse_datagram(buf, &rreq)) {
             case -1:
@@ -305,6 +304,8 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
 {
     (void) ndata;
     (void) args;
+
+    printf("NODE WRITE");
 
     return 0;
 }
