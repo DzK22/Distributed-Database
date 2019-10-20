@@ -17,6 +17,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/select.h>
 #define N 1024
 #define MAX_ATTR 32
 #define H 32

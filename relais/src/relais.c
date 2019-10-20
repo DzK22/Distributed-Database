@@ -122,8 +122,13 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
             break;
         case Read:
             usr = read_has_rights(cr, mugi);
-            if (usr == NULL) 
+            if (usr == NULL)
                 return 1;
+            else
+            {
+              printf("TOTO\n");
+              return 0;
+            }
             if (node_read_request(sock, cr, mugi, usr) == -1)
                 return -1;
             break;
@@ -195,19 +200,32 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
     }
 
     char *tmp, *attr;
-    size_t i, attr_len;
-    while ((attr = strtok_r(creq->message, ",", &tmp)) != NULL) {
+    size_t i, attr_len, cpt = 0, fin = 0;
+    attr = strtok_r(creq->message, ",", &tmp);
+    while (attr != NULL) {
         attr_len = strlen(attr);
+        printf("attr = %s\n", attr);
         for (i = 0; i < usr->attributs_len; i ++) {
+            printf("usr = %s\n", usr->attributs[i]);
             if (strncmp(attr, usr->attributs[i], attr_len) != 0) {
-                printf("has right FALSE\n");
-                return NULL;
+                continue;
             }
+            else
+              cpt++;    //pas forcément dans le mm ordre que les attributs stockés
         }
+        fin++;    //nb attributs envoyés
+        attr = strtok_r(NULL, ",", &tmp);
     }
-
-    printf("has right TRUE\n");
-    return usr;
+    /*printf("cpt = %ld\n", cpt);
+    printf("attributs->len = %ld\n", usr->attributs_len);
+    printf("fin = %ld\n", fin);*/
+    if (fin <= usr->attributs_len && (cpt == usr->attributs_len || cpt != 0))
+    {
+      printf("has right TRUE\n");
+      return usr;
+    }
+    printf("FALSE\n");
+    return NULL;
 }
 
 bool authentification (clientreq *creq, mugiwara *mugi)
