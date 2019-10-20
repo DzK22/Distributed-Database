@@ -124,11 +124,6 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
             usr = read_has_rights(cr, mugi);
             if (usr == NULL)
                 return 1;
-            else
-            {
-              printf("TOTO\n");
-              return 0;
-            }
             if (node_read_request(sock, cr, mugi, usr) == -1)
                 return -1;
             break;
@@ -169,6 +164,7 @@ auth_user * get_auth_user_from_login (const char *login, mugiwara *mugi)
 
 user * get_user_from_req (clientreq *creq, mugiwara *mugi)
 {
+    // verifie que le user qui correspond a la requete est bien connecté sinon NULL
     unsigned i;
     bool ip_ok, port_ok;
     for (i = 0; i < mugi->nb_hosts; i ++) {
@@ -204,7 +200,7 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
     size_t i, attr_len;
     attr = strtok_r(creq->message, ",", &tmp);
     while (attr != NULL) {
-        attr_len = strlen(attr);
+        attr_len = strlen(attr) + 1; // with \0
         found = false;
         printf("attr = %s\n", attr);
         for (i = 0; i < usr->attributs_len; i ++) {
@@ -389,6 +385,8 @@ int meet_new_node (const int sock, clientreq *creq, mugiwara *mugi)
     mugi->nb_nodes ++;
     mugi->node_id_counter ++;
 
+    printf("NEW NODE FOUND FOR FIELD %s\n", creq->message);
+
     // si un noeud du meme type existe deja, ecraser les données du nouveau noeud par les siennes (surement plus à jour) envoie message a ce noeud pour lui demander toutes ses donnees
     unsigned i;
     for (i = 0; i < (mugi->nb_nodes - 1); i ++) {
@@ -456,7 +454,8 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
     char *tmp, *field, buf[N];
     int val;
 
-    while ((field = strtok_r(creq->message, ",", &tmp)) != NULL) {
+    field = strtok_r(creq->message, ",", &tmp);
+    while (field != NULL) {
         for (i = 0; i < mugi->nb_nodes; i ++) {
             if (strncmp(field, mugi->nodes[i].field, strlen(field)) != 0)
                 continue;
@@ -476,8 +475,11 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
             buf[val] = '\0';
             if (send_toclient(sock, buf, &mugi->nodes[i].saddr) == -1)
                 return -1;
+            printf("READ REQ SEND TO NODE\n");
             return 0;
         }
+
+        field = strtok_r(NULL, ",", &tmp);
     }
 
     // NO CORRESPONDING NODE AVAILABLE
@@ -487,19 +489,16 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
 
 int follow_readres (const int sock, clientreq *creq, mugiwara *mugi)
 {
-    printf("follow readres bg\n");
+    printf("follow readres bg, mess = %s\n", creq->message);
     // /!/ creq->message = <user>:<data>;
-    char *username, *data, *tmp;
+    char *username, data[N], *tmp;
     username = strtok_r(creq->message, ":", &tmp);
     if (username == NULL) {
         perror("strtok_r");
         return -1;
     }
-    data = strtok_r(NULL, ":", &tmp);
-    if (data == NULL) {
-        perror("strtok_r");
-        return -1;
-    }
+    strncpy(data, creq->message + strlen(username) + 1, N);
+    printf("|| user = %s, data = %s\n", username, data);
 
     auth_user *authusr = get_auth_user_from_login(username, mugi);
     if (authusr == NULL)

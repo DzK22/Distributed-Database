@@ -87,7 +87,8 @@ int main (int argc, char **argv)
                     ssize_t bytes = recfromserveur(sock, buff, &serveur);
                     if (bytes == -1)
                         return EXIT_FAILURE;
-                    printf("ACCESS = %s\n", buff);
+                    buff[bytes] = '\0';
+                    printf("RESPONSE = %s\n", buff);
                 }
         }
     }

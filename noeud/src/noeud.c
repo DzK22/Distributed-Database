@@ -148,6 +148,10 @@ int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null termin
         fprintf(stderr, "parse_datagram: cannot assign all items: %s\n", buf);
         return 1;
     }
+    // degeullasse a virer quand trouver le bug du ; a fin de args
+    rreq->args[strlen(rreq->args) - 1] = '\0';
+
+    printf("args = %s\n", rreq->args);
 
     if (strncmp(tmp, "read", 5) == 0)
         rreq->type = Read;
@@ -207,7 +211,6 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
     // /!/ args = <username>:<field>;
 
     printf("NODE READ\n");
-    
     char *username, *field, *tmp;
     username = strtok_r((char *) args, ":", &tmp);
     if (username == NULL) {
@@ -221,9 +224,21 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
     }
 
     // verifions que ce noeud possède bien le champs
-    if (strcmp(field, ndata->field) != 0) {
+    if (strncmp(field, ndata->field, strlen(field) + 1) != 0) {
+        printf("field = %s, ndata field = %s\n", field, ndata->field);
         send_to_relais(ndata->sock, "3", 1);
+        printf("ERROR 3\n");
         return 1;
+    }
+
+    int tmpfd;
+    if ((tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644)) == -1) {
+        perror("open");
+        return -1;
+    }
+    if (close(tmpfd) == -1) {
+        perror("close");
+        return -1;
     }
 
     FILE *datafile = fopen(ndata->datafile, "r");
@@ -238,18 +253,22 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
         perror("malloc");
         return -1;
     }
-    char data[MESS_MAX];
+    char data[MESS_MAX] = "";
     size_t len;
     size_t n = DATAFILE_LINE_MAX;
 
     errno = 0;
     while ((bytes = getline(&line, &n, datafile)) != -1) {
         len = strlen(data);
+        if (line[bytes - 1] == '\n')
+            line[bytes - 1] = '\0';
         strncat(data, line, MESS_MAX - len -1);
         if (len >= MESS_MAX)
             break;
-        strncat(data, ",", MESS_MAX - len - 1);
+        strcat(data, ",");
     }
+
+    data[strlen(data) - 1] = '\0';
 
     free(line);
     if (errno != 0) {
@@ -273,8 +292,11 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
         return -1;
     }
 
+    printf("msg = %s\n", msg);
+
     if (send_to_relais(ndata->sock, msg, val) == -1)
         return -1;
+    printf("SUCCES\n");
 
     return 0;
 }

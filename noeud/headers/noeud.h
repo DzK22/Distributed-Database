@@ -2,6 +2,8 @@
 #define __NOEUD_H__
 
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
