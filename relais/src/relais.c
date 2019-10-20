@@ -199,33 +199,30 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
         return NULL;
     }
 
+    bool found;
     char *tmp, *attr;
-    size_t i, attr_len, cpt = 0, fin = 0;
+    size_t i, attr_len;
     attr = strtok_r(creq->message, ",", &tmp);
     while (attr != NULL) {
         attr_len = strlen(attr);
+        found = false;
         printf("attr = %s\n", attr);
         for (i = 0; i < usr->attributs_len; i ++) {
             printf("usr = %s\n", usr->attributs[i]);
-            if (strncmp(attr, usr->attributs[i], attr_len) != 0) {
-                continue;
+            if (strncmp(attr, usr->attributs[i], attr_len) == 0) {
+                found = true;
+                break;
             }
-            else
-              cpt++;    //pas forcément dans le mm ordre que les attributs stockés
         }
-        fin++;    //nb attributs envoyés
+        if (!found) {
+            printf("has right FALSE\n");
+            return NULL;
+        }
         attr = strtok_r(NULL, ",", &tmp);
     }
-    /*printf("cpt = %ld\n", cpt);
-    printf("attributs->len = %ld\n", usr->attributs_len);
-    printf("fin = %ld\n", fin);*/
-    if (fin <= usr->attributs_len && (cpt == usr->attributs_len || cpt != 0))
-    {
-      printf("has right TRUE\n");
-      return usr;
-    }
-    printf("FALSE\n");
-    return NULL;
+
+    printf("has right TRUE\n");
+    return usr;
 }
 
 bool authentification (clientreq *creq, mugiwara *mugi)
