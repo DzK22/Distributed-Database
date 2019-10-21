@@ -129,13 +129,18 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
                 return -1;
             break;
         case Write:
-            usr = write_has_rights(cr, mugi);
+            usr = get_user_from_req(cr, mugi);
             if (usr == NULL)
                 return 1;
             if (node_write_request(sock, cr, mugi, usr) == -1)
                 return -1;
             break;
         case Delete:
+            usr = get_user_from_req(cr, mugi);
+            if (usr == NULL)
+                return 1;
+            if (node_delete_request(sock, cr, mugi, usr) == -1)
+                return -1;
             break;
         case Meet: // REQUETE D'UN NOEUD, PAS D'UN CLIENT
             if (meet_new_node(sock, cr, mugi) == -1)
@@ -191,17 +196,6 @@ user * get_user_from_req (clientreq *creq, mugiwara *mugi)
     }
 
     return NULL;
-}
-
-user *write_has_rights(clientreq *creq, mugiwara *mugi)
-{
-  user *usr = get_user_from_req(creq, mugi);
-  if (!usr)
-  {
-    fprintf(stderr, "ERROR\n");
-    return NULL;
-  }
-  return usr;
 }
 
 user * read_has_rights (clientreq *creq, mugiwara *mugi)
@@ -473,40 +467,46 @@ int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi)
 
 int node_write_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
 {
-  size_t i;
-  char *tmp, *field, buff[N], *other, *another;
-  int val;
+    // request format for node = "write USER:VALUE;"
+    size_t i;
+    char *tmp, *tmp2, *field_plus_val, *field, *value, buff[N], field_plus_val_cpy[MAX_ATTR];
+    int bytes;
+    bool filled;
 
-  field = strtok_r(creq->message, ",", &tmp);
-  //printf("field début = %s\n", field);
-  while (field != NULL)
-  {
-    //printf("nodefield = %s\n", mugi->nodes[i].field);
-    //printf("field = %s\n", field);
-    for (i = 0; i < mugi->nb_nodes; i++)
-    {
-      another = strtok_r(field, ":", &other);
-      if (strncmp(another, mugi->nodes[i].field, strlen(another) != 0))
-        continue;
-      if (!mugi->nodes[i].active)
-        continue;
-      //printf("another = %s AND other = %s\n", another, other);
-      val = snprintf(buff, N, "write %s:%s;", usr->login, other);
-      if (val >= N || val < 0)
-      {
-        fprintf(stderr, "snprintf error");
-        return -1;
-      }
-      buff[val] = '\0';
-      if (send_toclient(sock, buff, &mugi->nodes[i].saddr) == -1)
-          return -1;
-      printf("WRITE REQ = %s\n", buff);
-      return 0;
+    field_plus_val = strtok_r(creq->message, ",", &tmp);
+    while (field_plus_val != NULL) {
+        filled = false;
+        for (i = 0; i < mugi->nb_nodes; i ++) {
+            tmp2 = NULL;
+            strncpy(field_plus_val_cpy, field_plus_val, MAX_ATTR);
+            field = strtok_r(field_plus_val_cpy, ":", &tmp2);
+            if (strncmp(field, mugi->nodes[i].field, strlen(field)) != 0)
+                continue;
+            if (!mugi->nodes[i].active)
+                continue;
+
+            // OK
+            value = strtok_r(NULL, ":", &tmp2);
+            bytes = snprintf(buff, N - 1, "write %s:%s;", usr->login, value);
+            if ((bytes >= N) || (bytes < 0)) {
+                fprintf(stderr, "snprintf error");
+                return -1;
+            }
+            buff[bytes] = '\0';
+            if (send_toclient(sock, buff, &mugi->nodes[i].saddr) == -1)
+                return -1;
+            filled = true;
+            printf("WRITE REQ = %s\n", buff);
+        }
+
+        if (!filled) {
+            printf("NO NODE FOUND FOR WRITING: %s\n", field);
+            return 1;
+        }
+        field_plus_val = strtok_r(NULL, ",", &tmp);
     }
-    field = strtok_r(NULL, ",", &tmp);
-  }
-  printf("THERE IS NO NODE FOR THAT FIELD\n");
-  return 1;
+
+    return 0;
 }
 
 int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
@@ -556,6 +556,12 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
         return 1;
     }
 
+    return 0;
+}
+
+int node_delete_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
+{
+    (void) sock, (void) creq, (void) mugi, (void) usr;
     return 0;
 }
 

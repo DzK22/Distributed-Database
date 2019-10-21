@@ -70,4 +70,6 @@ int node_delete (const node_data *ndata, const char *args);
 
 int change_all_data (const node_data *ndata, const char *new_data);
 
+int delete_user_file_line (const char *filename, const char *username);
+
 #endif

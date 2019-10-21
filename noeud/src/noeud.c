@@ -224,7 +224,6 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
 
     // verifions que ce noeud possède bien le champs
     if (strncmp(field, ndata->field, strlen(field) + 1) != 0) {
-        printf("field = %s, ndata field = %s\n", field, ndata->field);
         send_to_relais(ndata->sock, "3", 1);
         printf("ERROR 3\n");
         return 1;
@@ -266,15 +265,13 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
             break;
         strcat(data, ",");
     }
-
-    data[strlen(data) - 1] = '\0';
-
-    free(line);
     if (errno != 0) {
         perror("getline");
         return -1;
     }
 
+    data[strlen(data) - 1] = '\0';
+    free(line);
     if (fclose(datafile) == EOF) {
         perror("fclose");
         return -1;
@@ -302,10 +299,127 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
 
 int node_write (const node_data *ndata, const char *args) // args must be null terminated
 {
-    (void) ndata;
-    (void) args;
+    // args ne peut être que un seul champ ! (c'est au relais de split les champs vers les divers noeuds)
+    // /!/ args = <username>:<field_value>;
 
-    printf("NODE WRITE");
+    printf("NODE WRITE, args = %s\n", args);
+    char *username, *tmp, args_cpy[MESS_MAX];
+    strncpy(args_cpy, args, MESS_MAX);
+    username = strtok_r(args_cpy, ":", &tmp);
+    if (username == NULL) {
+        perror("strtok_r");
+        return -1;
+    }
+
+    int tmpfd;
+    if ((tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644)) == -1) {
+        perror("open");
+        return -1;
+    }
+    if (close(tmpfd) == -1) {
+        perror("close");
+        return -1;
+    }
+
+    // si elle existe, supprimer la ligne contenant le user et l'ancienne valeur qui lui est associée
+    if (delete_user_file_line(ndata->datafile, username) == -1)
+        return -1;
+
+    // ajouter la nouvelle ligne
+    FILE *datafile = fopen(ndata->datafile, "a");
+    if (datafile == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    if (fputs(args, datafile) == EOF) {
+        perror("fputs");
+        return -1;
+    }
+
+    if (fputc('\n', datafile) == EOF) {
+        perror("fputc");
+        return -1;
+    }
+
+    if (fclose(datafile) == EOF) {
+        perror("fclose");
+        return -1;
+    }
+
+    printf("WRITE END, SUCCES\n");
+    return 0;
+}
+
+int delete_user_file_line (const char *filename, const char *username)
+{
+    printf("NODE DELETE USER FILE LINE filename = %s, username = %s\n", filename, username);
+    char tmp_w_filename[MESS_MAX];
+    sprintf(tmp_w_filename, "%s_tmp", filename);
+
+    FILE *file_r = fopen(filename, "r");
+    if (file_r == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    FILE *file_w = fopen(tmp_w_filename, "w");
+    if (file_w == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    char *line = malloc(DATAFILE_LINE_MAX);
+    if (line == NULL) {
+        perror("malloc");
+        return -1;
+    }
+
+    char *usr, *tmp, line_cpy[MESS_MAX];
+    size_t username_len = strlen(username), n = DATAFILE_LINE_MAX;
+    ssize_t bytes;
+    errno = 0;
+    while ((bytes = getline(&line, &n, file_r)) != -1) {
+        tmp = NULL;
+        strncpy(line_cpy, line, n);
+        usr = strtok_r(line_cpy, ":", &tmp);
+        if (usr == NULL) {
+            perror("strtok_r");
+            return -1;
+        }
+        if (strncmp(usr, username, username_len + 1) == 0) {
+            // do not add this line to the buffer
+            printf("SKIP THIS LINE\n");
+            continue;
+        }
+
+        // add this line
+        if (fputs(line, file_w) == EOF) {
+            perror("fputs");
+            return -1;
+        }
+    }
+
+    if (errno != 0) {
+        perror("getline");
+        return -1;
+    }
+
+    free(line);
+    if (fclose(file_r) == EOF) {
+        perror("fclose");
+        return -1;
+    }
+
+    if (fclose(file_w) == EOF) {
+        perror("fclose");
+        return -1;
+    }
+
+    if (rename(tmp_w_filename, filename) == -1) {
+        perror("rename");
+        return -1;
+    }
 
     return 0;
 }
