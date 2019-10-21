@@ -59,6 +59,7 @@ int wait_for_request (int sock, mugiwara *mugi)
             case 1: // not program error, only incorrect message received
                 continue;
         }
+
         if (exec_client_request(sock, &creq, mugi) == -1)
             return -1;
     }
@@ -207,14 +208,15 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
 {
     user *usr = get_user_from_req(creq, mugi);
     if (!usr) {
-        printf("putin fils de pute\n");
         return NULL;
     }
 
     bool found;
     char *tmp, *attr;
     size_t i, attr_len;
-    attr = strtok_r(creq->message, ",", &tmp);
+    char crmess_cpy[N];
+    strcpy(crmess_cpy, creq->message);
+    attr = strtok_r(crmess_cpy, ",", &tmp);
     while (attr != NULL) {
         attr_len = strlen(attr) + 1; // with \0
         found = false;
@@ -513,14 +515,19 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
     unsigned i;
     char *tmp, *field, buf[N];
     int val;
+    size_t cpt = 0, n_fields = 0;
+
+    printf("MESSAGE = %s\n", creq->message);
 
     field = strtok_r(creq->message, ",", &tmp);
     while (field != NULL) {
+        n_fields ++;
         for (i = 0; i < mugi->nb_nodes; i ++) {
             if (strncmp(field, mugi->nodes[i].field, strlen(field)) != 0)
                 continue;
             if (!mugi->nodes[i].active)
                 continue;
+            printf("sa rentre pour field = %s\n", field);
 
             // OK
             val = snprintf(buf, N - 1, "read %s:%s;", usr->login, field);
@@ -536,15 +543,20 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
             if (send_toclient(sock, buf, &mugi->nodes[i].saddr) == -1)
                 return -1;
             printf("READ REQ SEND TO NODE = %s\n", buf);
-            return 0;
+            cpt ++;
+            break;
         }
 
         field = strtok_r(NULL, ",", &tmp);
     }
 
-    // NO CORRESPONDING NODE AVAILABLE
-    printf("NO NODE FOUND POUR LA REQUEST\n");
-    return 1;
+    if (n_fields != cpt) {
+        // NO CORRESPONDING NODE AVAILABLE
+        printf("NO NODE FOUND POUR LA REQUEST\n");
+        return 1;
+    }
+
+    return 0;
 }
 
 int follow_readres (const int sock, clientreq *creq, mugiwara *mugi)

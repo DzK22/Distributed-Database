@@ -1,5 +1,5 @@
 utilisateur:mot-de-passe:nom-champ
 bonjour:toto:taille
-bonsoir:tata:age:taille:poids
+bonsoir:tata:age:taille:poids:prix
 danyl:c'est_moi:poids
 zorglub:33:prix:age
