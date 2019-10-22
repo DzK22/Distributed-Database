@@ -324,28 +324,38 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
         return -1;
     }
 
-    if (fseek(datafile, -1, SEEK_END) == -1) {
-        perror("fseek");
+    errno = 0;
+    int c;
+    if (((c = fgetc(datafile)) == EOF) && (errno != 0)) {
+        perror("fgetc");
         return -1;
+    } 
+
+    if (c != EOF) {
+        if (fseek(datafile, -1, SEEK_END) == -1) {
+            perror("fseek");
+            return -1;
+        }
+
+        // lire le dernier caractere du fichier
+        switch (fgetc(datafile)) {
+            case -1:
+                perror("fgetc");
+                return -1;
+            case '\n':
+                break;
+            case '\r':
+                break;
+            default:
+                // add new line
+                if (fputc('\n', datafile) == EOF) {
+                    perror("fputc");
+                    return -1;
+                }
+                break;
+        }
     }
 
-    // lire le dernier caractere du fichier
-    switch (fgetc(datafile)) {
-        case -1:
-            perror("fgetc");
-            return -1;
-        case '\n':
-            break;
-        case '\r':
-            break;
-        default:
-            // add new line
-            if (fputc('\n', datafile) == EOF) {
-                perror("fputc");
-                return -1;
-            }
-            break;
-    }
 
     // ajout de la nouvelle ligne
     if (fputs(args, datafile) == EOF) {
