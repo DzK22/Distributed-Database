@@ -164,7 +164,7 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
 
 auth_user * get_auth_user_from_login (const char *login, mugiwara *mugi)
 {
-    unsigned i;
+    size_t i;
     size_t login_len = strlen(login);
     for (i = 0; i < mugi->nb_hosts; i ++) {
        if (strncmp(login, mugi->hosts[i].login, login_len) == 0)
@@ -195,7 +195,7 @@ node * get_field_from_node (clientreq *creq, mugiwara *mugi)
 user * get_user_from_req (clientreq *creq, mugiwara *mugi)
 {
     // verifie que le user qui correspond a la requete est bien connecté sinon NULL
-    unsigned i;
+    size_t i;
     bool ip_ok, port_ok;
     for (i = 0; i < mugi->nb_hosts; i ++) {
         ip_ok = creq->saddr.sin_addr.s_addr == mugi->hosts[i].saddr.sin_addr.s_addr;
@@ -366,7 +366,7 @@ mugiwara *init_mugiwara ()
         str = strtok_r(NULL, ":", &tmp); // psswd
         strncpy(mugi->users[i].mdp, str, MAX_ATTR);
 
-        unsigned j = 0;
+        size_t j = 0;
         while ((str = strtok_r(NULL, ":", &tmp)) != NULL) {
             strncpy(mugi->users[i].attributs[j], str,  MAX_ATTR);
             j ++;
@@ -420,13 +420,13 @@ int meet_new_node (const int sock, clientreq *creq, mugiwara *mugi)
     printf("NEW NODE FOUND FOR FIELD %s\n", creq->message);
 
     // si un noeud du meme type existe deja, ecraser les données du nouveau noeud par les siennes (surement plus à jour) envoie message a ce noeud pour lui demander toutes ses donnees
-    unsigned i;
+    size_t i;
     for (i = 0; i < (mugi->nb_nodes - 1); i ++) {
         if (strcmp(creq->message, mugi->nodes[i].field) == 0) {
             // bloquer temporairement le noeud car n'a pas les données a jour
             mugi->nodes[mugi->nb_nodes - 1].active = false;
             char msg[N];
-            if (sprintf(msg, "getall %u;", mugi->node_id_counter - 1) < 0) {
+            if (sprintf(msg, "getall %lu;", mugi->node_id_counter - 1) < 0) {
                 fprintf(stderr, "sprintf error\n");
                 return -1;
             }
@@ -442,9 +442,9 @@ int meet_new_node (const int sock, clientreq *creq, mugiwara *mugi)
 int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi)
 {
     // message de creq = id_node:data;
-    unsigned to_id;
+    size_t to_id;
     char data[N];
-    switch (sscanf(creq->message, "%u:%s;", &to_id, data)) {
+    switch (sscanf(creq->message, "%lu:%s;", &to_id, data)) {
         case EOF:
             perror("sscanf");
             return -1;
@@ -525,7 +525,7 @@ int node_write_request (const int sock, clientreq *creq, mugiwara *mugi, user *u
 int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
 {
     // recherche d'un noeud valide pour chaque champ de la reqûete
-    unsigned i;
+    size_t i;
     char *tmp, *field, buf[N];
     int val;
     size_t cpt = 0, n_fields = 0;
