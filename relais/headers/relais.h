@@ -46,7 +46,7 @@ typedef struct auth_user {
 typedef struct node {
     struct sockaddr_in saddr;
     char field[MAX_ATTR];
-    unsigned id; // identifiant unique
+    size_t id; // identifiant unique
     bool active; // mettre a false pour ne rien demander a ce serveur
 } node;
 
@@ -66,7 +66,7 @@ typedef struct mugiwara
   node *nodes;        // tableau des noeuds connus
   size_t nb_nodes;    // nombre de noeuds actuels
   size_t max_nodes;   // max de noeuds
-  unsigned node_id_counter;
+  size_t node_id_counter;
 } mugiwara;
 
 /**
