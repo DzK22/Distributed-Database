@@ -174,6 +174,24 @@ auth_user * get_auth_user_from_login (const char *login, mugiwara *mugi)
     return NULL;
 }
 
+node * get_field_from_node (clientreq *creq, mugiwara *mugi)
+{
+  size_t i;
+  bool ip_ok, port_ok;
+  for (i = 0; i < mugi->nb_nodes; i ++)
+  {
+    ip_ok = creq->saddr.sin_addr.s_addr == mugi->nodes[i].saddr.sin_addr.s_addr;
+    if (!ip_ok)
+        continue;
+    port_ok = creq->saddr.sin_port == mugi->nodes[i].saddr.sin_port;
+    if (!port_ok)
+        continue;
+
+    return &mugi->nodes[i];
+  }
+  return NULL;
+}
+
 user * get_user_from_req (clientreq *creq, mugiwara *mugi)
 {
     // verifie que le user qui correspond a la requete est bien connecté sinon NULL
@@ -552,7 +570,23 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
 
 int node_delete_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
 {
-    (void) sock, (void) creq, (void) mugi, (void) usr;
+    (void) creq;
+    size_t i;
+    char buff[N];
+    int ret;
+    for (i = 0; i < mugi->nb_nodes; i++)
+    {
+      if (!mugi->nodes[i].active)
+          continue;
+      ret = snprintf(buff, N, "delete %s;", usr->login);
+      if (ret >= N || ret < 0)
+      {
+        fprintf(stderr, "snprintf error\n");
+        return 1;
+      }
+      if (send_toclient(sock, buff, &mugi->nodes[i].saddr) == -1)
+          return -1;
+    }
     return 0;
 }
 
@@ -571,7 +605,18 @@ int follow_readres (const int sock, clientreq *creq, mugiwara *mugi)
     auth_user *authusr = get_auth_user_from_login(username, mugi);
     if (authusr == NULL)
         return 1;
-    if (send_toclient(sock, data, &authusr->saddr) == -1)
+
+    node *noeud = get_field_from_node(creq, mugi);
+    if (noeud == NULL)
+        return 1;
+
+    char buff[N], tosend[N];
+
+    //PETIT HACK DES FAMILLES
+    strcpy(tosend, noeud->field);
+    tosend[strlen(tosend) - 1] = '\0';
+    snprintf(buff, 5000, "%s = %s", tosend, data);
+    if (send_toclient(sock, buff, &authusr->saddr) == -1)
         return -1;
 
     return 0;

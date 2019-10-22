@@ -167,6 +167,8 @@ int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi);
 
 user * get_user_from_req (clientreq *creq, mugiwara *mugi);
 
+node *get_field_from_node(clientreq *creq, mugiwara *mugi);
+
 auth_user * get_auth_user_from_login (const char *login, mugiwara *mugi);
 
 int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr);
