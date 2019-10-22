@@ -18,8 +18,6 @@
 #include <unistd.h>
 #include <string.h>
 #define N 1024
-#define CODE_0 "AUTHENTIFICATION SUCCESS\n"
-#define CODE_N1 "AUTHENTIFICATION HAS FAILED\n"
 
 /**
 * \fn socket_create().
