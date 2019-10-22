@@ -5,15 +5,20 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <string.h>
 
-#define DG_DATA_MAX 4096
+#define DG_DATA_MAX 65536 // octets
 
 // requetes et réponses
 // CREQ = Client -> Relais
 // RREQ = Relais -> Noeud
 // RRES = Relais -> Client
 // NRES = Noeud -> Relais
-
+// -------------------------
 // CREQ
 #define CREQ_AUTH 1
 #define CREQ_READ 2
@@ -37,7 +42,7 @@
 #define RRES_READ -7
 #define RRES_WRITE -8
 #define RRES_DELETE -9
-
+// ACK
 #define ACK 0
 
 // status
@@ -55,17 +60,26 @@
 #define ERR_DELETE -8
 
 typedef struct {
-    unsigned id;
-    unsigned short request;
-    char *data[DG_DATA_MAX];
-    short status;
-    uint32_t addr;
+    // en-tête
+    u_int16_t id; // 2 octets
+    u_int8_t request; // 1 octet
+    int8_t status; // 1 octet
+    u_int16_t data_size; // 2 octets
+    u_int16_t checksum; // 2 octets
+    // data
+    char *data; // data_len octets (max = DG_DATA_MAX)
+    u_int16_t data_len;
+    // divers
+    u_int32_t addr;
     in_port_t port;
-    bool ready;
+    dgram *next;
 } dgram;
+// dgram ready quand data_len == data_size !
 
-dgram * dgram_add_from_raw (dgram *dglist, const char *raw);
-void dgram_del_from_ack (dgram *dglist, unsigned ack);
-int dgram_print_status (dgram *dg);
+int dgram_add_from_raw (dgram *dglist, dgram **newdg, void *raw, const size_t raw_size, const struct sockaddr_in *saddr);
+dgram * dgram_del_from_ack (dgram *dglist, const u_int16_t ack);
+void dgra
+bool dgram_is_ready (dgram *dg);
+int dgram_print_status (const dgram *dg);
 
 #endif
