@@ -136,6 +136,7 @@ void wait_for_request (const node_data *ndata)
 
 int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null terminated
 {
+    printf("Nouvelle requete recue: %s\n", buf);
     char tmp[MESS_MAX];
     errno = 0;
     if (sscanf(buf, "%s %s;", tmp, rreq->args) != 2) {
@@ -149,8 +150,6 @@ int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null termin
     }
     // degeullasse a virer quand trouver le bug du ; a fin de args
     rreq->args[strlen(rreq->args) - 1] = '\0';
-
-    printf("args = %s\n", rreq->args);
 
     if (strncmp(tmp, "read", 5) == 0)
         rreq->type = Read;
@@ -174,28 +173,23 @@ int exec_relais_request (const node_data *ndata, relaisreq *rreq)
 {
     switch (rreq->type) {
         case Read:
-            printf("READ: %s\n", rreq->args);
             if (node_read(ndata, rreq->args) == -1)
                 return -1;
             break;
         case Write:
-            printf("WRITE: %s\n", rreq->args);
             if (node_write(ndata, rreq->args) == -1)
                 return -1;
             break;
         case Delete:
-            printf("DELETE: %s\n", rreq->args);
             if (node_delete(ndata, rreq->args) == -1)
                 return -1;
             break;
         case Changeall:
-            printf("CHANGE ALL, new data: %s\n", rreq->args);
             if (change_all_data(ndata, rreq->args) == -1)
                 return -1;
             break;
         case Getall:
-            printf("GET ALL\n");
-                // if get_all_data ...
+            // if get_all_data ...
             break;
         default:
             return -1;
@@ -209,7 +203,6 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
     // args ne peut être que un seul champ ! (c'est au relais de split les champs vers les divers noeuds)
     // /!/ args = <username>:<field>;
 
-    printf("NODE READ\n");
     char *username, *field, *tmp;
     username = strtok_r((char *) args, ":", &tmp);
     if (username == NULL) {
@@ -288,11 +281,8 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
         return -1;
     }
 
-    printf("msg = %s\n", msg);
-
     if (send_to_relais(ndata->sock, msg, val) == -1)
         return -1;
-    printf("SUCCES\n");
 
     return 0;
 }
@@ -302,7 +292,6 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
     // args ne peut être que un seul champ ! (c'est au relais de split les champs vers les divers noeuds)
     // /!/ args = <username>:<field_value>;
 
-    printf("NODE WRITE, args = %s\n", args);
     char *username, *tmp, args_cpy[MESS_MAX];
     strncpy(args_cpy, args, MESS_MAX);
     username = strtok_r(args_cpy, ":", &tmp);
@@ -325,20 +314,42 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
     if (delete_user_file_line(ndata->datafile, username) == -1)
         return -1;
 
+
+    // si le dernier caractere est un \n, le supprimer ! sinon doublon de \n et ligne vide inutile
+
     // ajouter la nouvelle ligne
-    FILE *datafile = fopen(ndata->datafile, "a");
+    FILE *datafile = fopen(ndata->datafile, "a+");
     if (datafile == NULL) {
         perror("fopen");
         return -1;
     }
 
-    if (fputs(args, datafile) == EOF) {
-        perror("fputs");
+    if (fseek(datafile, -1, SEEK_END) == -1) {
+        perror("fseek");
         return -1;
     }
 
-    if (fputc('\n', datafile) == EOF) {
-        perror("fputc");
+    // lire le dernier caractere du fichier
+    switch (fgetc(datafile)) {
+        case -1:
+            perror("fgetc");
+            return -1;
+        case '\n':
+            break;
+        case '\r':
+            break;
+        default:
+            // add new line
+            if (fputc('\n', datafile) == EOF) {
+                perror("fputc");
+                return -1;
+            }
+            break;
+    }
+
+    // ajout de la nouvelle ligne
+    if (fputs(args, datafile) == EOF) {
+        perror("fputs");
         return -1;
     }
 
@@ -347,13 +358,25 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
         return -1;
     }
 
-    printf("WRITE END, SUCCES\n");
+    char msg[MESS_MAX];
+    int val;
+    val = snprintf(msg, MESS_MAX, "writeres success:%s;", username);
+    if (val >= MESS_MAX) {
+        fprintf(stderr, "snprintf truncate\n");
+        return 1;
+    } else if (val < 0) {
+        perror("snprintf");
+        return -1;
+    }
+
+    if (send_to_relais(ndata->sock, msg, val) == -1)
+        return -1;
+
     return 0;
 }
 
 int delete_user_file_line (const char *filename, const char *username)
 {
-    printf("NODE DELETE USER FILE LINE filename = %s, username = %s\n", filename, username);
     char tmp_w_filename[MESS_MAX];
     sprintf(tmp_w_filename, "%s_tmp", filename);
 
@@ -426,8 +449,35 @@ int delete_user_file_line (const char *filename, const char *username)
 
 int node_delete (const node_data *ndata, const char *args) // args must be null terminated
 {
-    (void) ndata;
-    (void) args;
+    const char *username = args;
+
+    int tmpfd;
+    if ((tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644)) == -1) {
+        perror("open");
+        return -1;
+    }
+    if (close(tmpfd) == -1) {
+        perror("close");
+        return -1;
+    }
+
+    // si elle existe, supprimer la ligne contenant le user et l'ancienne valeur qui lui est associée
+    if (delete_user_file_line(ndata->datafile, username) == -1)
+        return -1;
+
+    char msg[MESS_MAX];
+    int val;
+    val = snprintf(msg, MESS_MAX, "deleteres success:%s;", username);
+    if (val >= MESS_MAX) {
+        fprintf(stderr, "snprintf truncate\n");
+        return 1;
+    } else if (val < 0) {
+        perror("snprintf");
+        return -1;
+    }
+
+    if (send_to_relais(ndata->sock, msg, val) == -1)
+        return -1;
 
     return 0;
 }

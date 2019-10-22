@@ -88,7 +88,7 @@ int main (int argc, char **argv)
                     if (bytes == -1)
                         return EXIT_FAILURE;
                     buff[bytes] = '\0';
-                    printf("RESPONSE = %s\n", buff);
+                    printf("\x1B[96m%s\x1B[0m\n", buff);
                 }
         }
     }

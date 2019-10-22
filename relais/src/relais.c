@@ -70,6 +70,7 @@ int wait_for_request (int sock, mugiwara *mugi)
 
 int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // data should be null terminated
 {
+    printf("Nouvelle requete recue: %s\n", data);
     char tmp[N];
     errno = 0;
     if (sscanf(data, "%s %s;", tmp, cr->message) != 2) {
@@ -110,7 +111,7 @@ int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
     //static int z = 0;
     switch (cr->type) {
         case Authentification:
-            printf("AUTHENTIFICATION => %s\n", cr->message);
+            printf("Authentification => %s\n", cr->message);
             if (authentification(cr, mugi)) {
                 printf("success\n");
                 if (send_toclient(sock, "0", &cr->saddr) == -1)
@@ -214,9 +215,7 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
     while (attr != NULL) {
         attr_len = strlen(attr) + 1; // with \0
         found = false;
-        //printf("attr = %s\n", attr);
         for (i = 0; i < usr->attributs_len; i ++) {
-            //printf("usr = %s\n", usr->attributs[i]);
             attr_len = (strlen(usr->attributs[i]) > strlen(attr)) ? strlen(usr->attributs[i]) : strlen(attr);
             if (strncmp(attr, usr->attributs[i], attr_len) == 0) {
                 found = true;
@@ -348,12 +347,9 @@ mugiwara *init_mugiwara ()
         strncpy(mugi->users[i].login, str, MAX_ATTR);
         str = strtok_r(NULL, ":", &tmp); // psswd
         strncpy(mugi->users[i].mdp, str, MAX_ATTR);
-        //printf("login = %s\n", login);
-        //printf("mdp = %s\n", mdp);
 
         unsigned j = 0;
         while ((str = strtok_r(NULL, ":", &tmp)) != NULL) {
-            //printf("attr = %s\n", str);
             strncpy(mugi->users[i].attributs[j], str,  MAX_ATTR);
             j ++;
         }
@@ -496,7 +492,6 @@ int node_write_request (const int sock, clientreq *creq, mugiwara *mugi, user *u
             if (send_toclient(sock, buff, &mugi->nodes[i].saddr) == -1)
                 return -1;
             filled = true;
-            printf("WRITE REQ = %s\n", buff);
         }
 
         if (!filled) {
@@ -517,8 +512,6 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
     int val;
     size_t cpt = 0, n_fields = 0;
 
-    printf("MESSAGE = %s\n", creq->message);
-
     field = strtok_r(creq->message, ",", &tmp);
     while (field != NULL) {
         n_fields ++;
@@ -527,7 +520,6 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
                 continue;
             if (!mugi->nodes[i].active)
                 continue;
-            printf("sa rentre pour field = %s\n", field);
 
             // OK
             val = snprintf(buf, N - 1, "read %s:%s;", usr->login, field);
@@ -542,7 +534,6 @@ int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *us
             buf[val] = '\0';
             if (send_toclient(sock, buf, &mugi->nodes[i].saddr) == -1)
                 return -1;
-            printf("READ REQ SEND TO NODE = %s\n", buf);
             cpt ++;
             break;
         }
@@ -567,21 +558,74 @@ int node_delete_request (const int sock, clientreq *creq, mugiwara *mugi, user *
 
 int follow_readres (const int sock, clientreq *creq, mugiwara *mugi)
 {
-    printf("follow readres bg, mess = %s\n", creq->message);
-    // /!/ creq->message = <user>:<data>;
-    char *username, data[N], *tmp;
-    username = strtok_r(creq->message, ":", &tmp);
+    // /!/ creq->message = <user>:<data>
+    char *username, data[N], *tmp, mess_cpy[N];
+    strncpy(mess_cpy, creq->message, N);
+    username = strtok_r(mess_cpy, ":", &tmp);
     if (username == NULL) {
         perror("strtok_r");
         return -1;
     }
-    strncpy(data, creq->message + strlen(username) + 1, N);
-    printf("|| user = %s, data = %s\n", username, data);
 
+    strncpy(data, creq->message + strlen(username) + 1, N);
     auth_user *authusr = get_auth_user_from_login(username, mugi);
     if (authusr == NULL)
         return 1;
     if (send_toclient(sock, data, &authusr->saddr) == -1)
+        return -1;
+
+    return 0;
+}
+
+int follow_writeres (const int sock, clientreq *creq, mugiwara *mugi)
+{
+    // /!/ creq->message = success:USER   (si succès)
+    char *username, *first, *tmp, mess_cpy[N];
+    strncpy(mess_cpy, creq->message, N);
+    first = strtok_r(mess_cpy, ":", &tmp);
+    username = strtok_r(NULL, ":", &tmp);
+    if (!first || !username) {
+        perror("strtok_r");
+        return -1;
+    }
+
+    if (strncmp(first, "success", 8) != 0) {
+        // ERROR (not success) => envoyer err au client
+        return 1;
+    }
+
+    // envoyer success au client
+    auth_user *authusr = get_auth_user_from_login(username, mugi);
+    if (authusr == NULL)
+        return 1;
+    if (send_toclient(sock, "write success !", &authusr->saddr) == -1)
+        return -1;
+
+    return 0;
+}
+
+int follow_deleteres (const int sock, clientreq *creq, mugiwara *mugi)
+{
+    // /!/ creq->message = success:USER   (si succès)
+    char *username, *first, *tmp, mess_cpy[N];
+    strncpy(mess_cpy, creq->message, N);
+    first = strtok_r(mess_cpy, ":", &tmp);
+    username = strtok_r(NULL, ":", &tmp);
+    if (!first || !username) {
+        perror("strtok_r");
+        return -1;
+    }
+
+    if (strncmp(first, "success", 8) != 0) {
+        // ERROR (not success) => envoyer err au client
+        return 1;
+    }
+
+    // envoyer success au client
+    auth_user *authusr = get_auth_user_from_login(username, mugi);
+    if (authusr == NULL)
+        return 1;
+    if (send_toclient(sock, "delete success !", &authusr->saddr) == -1)
         return -1;
 
     return 0;

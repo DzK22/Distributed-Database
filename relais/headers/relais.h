@@ -22,7 +22,7 @@
 #define MAX_ATTR 32
 #define H 32
 
-enum message_types {Authentification, Read, Write, Delete, Meet, Getallres, Readres};
+enum message_types {Authentification, Read, Write, Delete, Meet, Getallres, Readres, Writeres, Deleteres};
 // auth, read, write, delete, meet in raw
 
 typedef struct clientreq {
@@ -172,5 +172,7 @@ auth_user * get_auth_user_from_login (const char *login, mugiwara *mugi);
 int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr);
 
 int follow_readres (const int sock, clientreq *creq, mugiwara *mugi);
+int follow_writeres (const int sock, clientreq *creq, mugiwara *mugi);
+int follow_deleteres (const int sock, clientreq *creq, mugiwara *mugi);
 
 #endif
