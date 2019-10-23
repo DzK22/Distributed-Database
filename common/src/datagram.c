@@ -51,6 +51,7 @@ int dgram_print_status (const dgram *dg)
     }
 
     printf("\033[0m\n"); // reset color
+    return 0;
 }
 
 int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, const struct sockaddr_in *saddr)
@@ -73,7 +74,7 @@ int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, const 
                     return 1;
                 }
                 // concatener le data
-                const size_t n = (raw_size > (dg->data_size - dg->data_len)) ? dg->data_size - dg->data_len : raw_size;
+                const size_t n = (((int) raw_size) > (((int) dg->data_size) - ((int) dg->data_len))) ? ((int) dg->data_size) - ((int) dg->data_len) : ((int) raw_size);
                 memcpy(dg->data + dg->data_len, raw, n);
                 return 0;
             }
@@ -176,7 +177,7 @@ dgram * dgram_get_by_id (dgram *dglist, const uint16_t id)
     return NULL;
 }
 
-static unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2) // le plus récent en 1er
+unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2) // le plus récent en 1er
 {
    return (tv1->tv_sec - tv2->tv_sec) * 1000 - (tv1->tv_usec - tv2->tv_usec) / 1000;
 }
@@ -203,12 +204,14 @@ int dgram_check_timeout_delete (dgram **dglist)
         old = dg;
         dg = dg->next;
     }
+
+    return 0;
 }
 
 
 int dgram_check_timeout_resend (const int sock, dgram **dglist)
 {
-    dgram *dg = *dglist, *old = NULL;    
+    dgram *dg = *dglist;    
     struct timeval now;
     if (gettimeofday(&now, NULL) == -1) {
         perror("gettimeofday");
@@ -221,9 +224,28 @@ int dgram_check_timeout_resend (const int sock, dgram **dglist)
                 return -1;
         }
 
-        old = dg;
         dg = dg->next;
     }
+
+    return 0;
+}
+
+int dgram_create_raw (const dgram *dg, void *buf, size_t buf_size)
+{
+    if (buf_size < ((size_t) (DG_HEADER_SIZE + dg->data_len))) {
+        fprintf(stderr, "dgram_create_raw size error\n");
+        return -1;
+    }
+
+    // header
+    ((uint16_t *) buf)[0] = dg->id;
+    ((uint8_t *) buf)[2] = dg->request;
+    ((uint8_t *) buf)[3] = dg->status;
+    ((uint16_t *) buf)[2] = dg->data_size;
+    ((uint16_t *) buf)[3] = dg->checksum;
+    // data
+    memcpy(buf + DG_HEADER_SIZE, dg->data, dg->data_len);
+    return 0;
 }
 
 int dgram_resend (const int sock, dgram *dg)
@@ -232,10 +254,10 @@ int dgram_resend (const int sock, dgram *dg)
     saddr.sin_addr.s_addr = dg->addr;
     saddr.sin_port = dg->port;
     char buf[DG_DATA_MAX + DG_HEADER_SIZE];
-    // paquet_create (dg) machin
-    // sck_send
+    if (dgram_create_raw(dg, buf, DG_DATA_MAX + DG_HEADER_SIZE) == -1)
+        return -1;
+    if (sck_send(sock, &saddr, buf, dg->data_len + DG_HEADER_SIZE) == -1)
+        return -1;
 
     return 0;
 }
-
-

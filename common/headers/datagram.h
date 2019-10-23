@@ -12,14 +12,13 @@
 #include <string.h>
 #include <sys/time.h>
 #include <stdint.h>
-
 #include "sck.h"
 
 #define DG_DATA_MAX 65536 // octets
 #define DG_HEADER_SIZE 10
 #define DG_FIRST_OCTET 0x0000 // 2 octets à 0
 #define DG_DELETE_TIMEOUT 400 // si dgram reçu non complet apres 400ms, le supprimer
-#define DG_RESEND_TIMEOUT 600 // si dgram envoyé non acquis apres 600ms, le réenvoyer
+#define DG_RESEND_TIMEOUT 500 // si dgram envoyé non acquis apres 600ms, le réenvoyer
 
 // requetes et réponses
 // CREQ = Client -> Relais
@@ -91,8 +90,11 @@ typedef struct dgram_s {
 
 int dgram_add_from_raw (dgram **dglist,void *raw, const size_t raw_size, const struct sockaddr_in *saddr);
 dgram * dgram_del_from_ack (dgram *dglist, const uint16_t ack);
-void dgra
 bool dgram_is_ready (dgram *dg);
 int dgram_print_status (const dgram *dg);
+int dgram_check_timeout_delete (dgram **dglist);
+int dgram_check_timeout_resend (const int sock, dgram **dglist);
+int dgram_resend (const int sock, dgram *dg);
+unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2);
 
 #endif
