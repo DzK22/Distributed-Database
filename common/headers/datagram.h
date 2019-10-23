@@ -12,6 +12,7 @@
 #include <string.h>
 
 #define DG_DATA_MAX 65536 // octets
+#define DG_FIRST_OCTET 0x00
 
 // requetes et réponses
 // CREQ = Client -> Relais
@@ -59,7 +60,7 @@
 #define ERR_WRITE -7
 #define ERR_DELETE -8
 
-typedef struct {
+typedef struct dgram_s {
     // en-tête
     u_int16_t id; // 2 octets
     u_int8_t request; // 1 octet
@@ -72,11 +73,12 @@ typedef struct {
     // divers
     u_int32_t addr;
     in_port_t port;
-    dgram *next;
+    time_t creation_time;
+    struct dgram_s *next;
 } dgram;
 // dgram ready quand data_len == data_size !
 
-int dgram_add_from_raw (dgram *dglist, dgram **newdg, void *raw, const size_t raw_size, const struct sockaddr_in *saddr);
+int dgram_add_from_raw (dgram **dglist,void *raw, const size_t raw_size, const struct sockaddr_in *saddr);
 dgram * dgram_del_from_ack (dgram *dglist, const u_int16_t ack);
 void dgra
 bool dgram_is_ready (dgram *dg);

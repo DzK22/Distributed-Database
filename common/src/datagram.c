@@ -53,46 +53,85 @@ int dgram_print_status (const dgram *dg)
     printf("\033[0m\n"); // reset color
 }
 
-int dgram_add_from_raw (dgram *dglist, dgram **newdg, void *raw, const size_t raw_size, const struct sockaddr_in *saddr)
+int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, const struct sockaddr_in *saddr)
 {
     // ici parser le paquet brut. si un paquet avec meme ip, port, request, status, existe deja, concatener le data avec l'actuel.
     // sinon, creer un nouveau paquet
+    
+    // début du paquet si first_octet == DG_FIRST_OCTET
+    bool new_dgram = false;
+    if (((u_int8_t *) raw)[0] == DG_FIRST_OCTET)
+        new_dgram = true;
 
-    dgram *dg = dglist;
-    while (dg != NULL) {
-        if (!dg->ready && (dg->addr == saddr->sin_addr.s_addr) && (dg->port == saddr->sin_port)) {
-            // concatener le data
-            const size_t n = (raw_size > (dg->data_size - dg->data_len)) ? dg->data_size - dg->data_len : raw_size;
-            memcpy(dg->data + dg->data_len, raw, n);
-            return 0;
+    if (!new_dgram) {
+        // SUITE DE DATA
+        dgram *dg = *dglist;
+        while (dg != NULL) {
+            if ((dg->addr == saddr->sin_addr.s_addr) && (dg->port == saddr->sin_port)) {
+                if ((raw_size + dg->data_len) > dg->data_size) {
+                    // DEPASSEMENT BUFFER
+                    return 1;
+                }
+                // concatener le data
+                const size_t n = (raw_size > (dg->data_size - dg->data_len)) ? dg->data_size - dg->data_len : raw_size;
+                memcpy(dg->data + dg->data_len, raw, n);
+                return 0;
+            }
+            dg = dg->next;
         }
+    } else {
+        // NOUVEAU PAQUET
+        if (raw_size < 8) {
+            // taille insuffisante pour être un en-tête
+            return 1;
+        }
+
+        // si ici, ajouter un nouveau datagram
+        dgram *new_dg = malloc(sizeof(dgram));
+        if (new_dg == NULL) {
+            perror("malloc");
+            return -1;
+        }
+        new_dg->id = ((u_int16_t *) raw)[0];
+        new_dg->request = ((u_int8_t *) raw)[2];
+        new_dg->status = ((u_int8_t *) raw)[3];
+        new_dg->data_len = ((u_int16_t *) raw)[2];
+        new_dg->checksum = ((u_int16_t *) raw)[3];
+        new_dg->data = malloc(new_dg->data_len);
+        if (new_dg->data == NULL) {
+            perror("malloc");
+            return -1;
+        }
+
+        new_dg->next = *dglist;
+        *dglist = new_dg;
+    }
+
+    return 0;
+}
+
+dgram * dgram_del_from_id (dgram *dglist, const u_int16_t id)
+{
+    dgram *dg = dglist, *old = NULL;
+    while (dg != NULL) {
+        if (dg->id == id) {
+            // del this dgram
+            dgram *to_return;
+            if (old == NULL)
+                to_return = NULL;
+            else {
+                to_return = old;
+                old->next = dg->next;
+            }
+            free(dg->data);
+            free(dg);
+            return to_return;
+        }
+        old = dg;
         dg = dg->next;
     }
 
-    if (raw_size < 8) {
-        // taille insuffisante pour être un en-tête
-        return 1;
-    }
-
-    // si ici, ajouter un nouveau datagram
-    dgram *new_dg = malloc(sizeof(dgram));
-    if (new_dg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    new_dg->id = ((u_int16_t *) raw)[0];
-    new_dg->request = ((u_int8_t *) raw)[2];
-    new_dg->status = ((u_int8_t *) raw)[3];
-    new_dg->data_len = ((u_int16_t *) raw)[2];
-    new_dg->checksum = ((u_int16_t *) raw)[3];
-    new_dg->data = malloc(new_dg->data_len);
-    if (new_dg->data == NULL) {
-        perror("malloc");
-        return -1;
-    }
-
-    new_dg->next = dglist;
-    return 0;
+    return NULL;
 }
 
 dgram * dgram_del_from_ack (dgram *dglist, const u_int16_t ack)
@@ -118,3 +157,5 @@ dgram * dgram_del_from_ack (dgram *dglist, const u_int16_t ack)
 
     return NULL;
 }
+
+
