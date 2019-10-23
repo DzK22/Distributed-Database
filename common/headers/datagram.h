@@ -10,13 +10,21 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <string.h>
+#include <sys/time.h>
+#include <stdint.h>
+
+#include "sck.h"
 
 #define DG_DATA_MAX 65536 // octets
-#define DG_FIRST_OCTET 0x00
+#define DG_HEADER_SIZE 10
+#define DG_FIRST_OCTET 0x0000 // 2 octets à 0
+#define DG_DELETE_TIMEOUT 400 // si dgram reçu non complet apres 400ms, le supprimer
+#define DG_RESEND_TIMEOUT 600 // si dgram envoyé non acquis apres 600ms, le réenvoyer
 
 // requetes et réponses
 // CREQ = Client -> Relais
 // RREQ = Relais -> Noeud
+// NREQ = Noeud -> Relais
 // RRES = Relais -> Client
 // NRES = Noeud -> Relais
 // -------------------------
@@ -25,24 +33,27 @@
 #define CREQ_READ 2
 #define CREQ_WRITE 3
 #define CREQ_DELETE 4
+#define CREQ_LOGOUT 5
 // RREQ
-#define RREQ_READ 5
-#define RREQ_WRITE 6
-#define RREQ_DELETE 7
-#define RREQ_DATA 8
-#define RREQ_SYNC 9
-#define RREQ_DESTROY 10
+#define RREQ_READ 6
+#define RREQ_WRITE 7
+#define RREQ_DELETE 8
+#define RREQ_DATA 9
+#define RREQ_SYNC 10
+#define RREQ_DESTROY 11
 // NRES
 #define NRES_READ -1
 #define NRES_WRITE -2
 #define NRES_DELETE -3
 #define NRES_DATA -4
 #define NRES_SYNC -5
+// NREQ
+#define NREQ_LOGOUT -6
 // RRES
-#define RRES_AUTH -6
-#define RRES_READ -7
-#define RRES_WRITE -8
-#define RRES_DELETE -9
+#define RRES_AUTH -7
+#define RRES_READ -8
+#define RRES_WRITE -9
+#define RRES_DELETE -10
 // ACK
 #define ACK 0
 
@@ -61,25 +72,25 @@
 #define ERR_DELETE -8
 
 typedef struct dgram_s {
-    // en-tête
-    u_int16_t id; // 2 octets
-    u_int8_t request; // 1 octet
+    // en-tête (2 premiers octets = indiquer debut en-tête)
+    uint16_t id; // 2 octets
+    uint8_t request; // 1 octet
     int8_t status; // 1 octet
-    u_int16_t data_size; // 2 octets
-    u_int16_t checksum; // 2 octets
+    uint16_t data_size; // 2 octets
+    uint16_t checksum; // 2 octets
     // data
     char *data; // data_len octets (max = DG_DATA_MAX)
-    u_int16_t data_len;
+    uint16_t data_len;
     // divers
-    u_int32_t addr;
-    in_port_t port;
-    time_t creation_time;
+    uint32_t addr; // format network
+    in_port_t port; // format network
+    struct timeval creation_time;
     struct dgram_s *next;
 } dgram;
 // dgram ready quand data_len == data_size !
 
 int dgram_add_from_raw (dgram **dglist,void *raw, const size_t raw_size, const struct sockaddr_in *saddr);
-dgram * dgram_del_from_ack (dgram *dglist, const u_int16_t ack);
+dgram * dgram_del_from_ack (dgram *dglist, const uint16_t ack);
 void dgra
 bool dgram_is_ready (dgram *dg);
 int dgram_print_status (const dgram *dg);
