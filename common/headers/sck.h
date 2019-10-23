@@ -15,7 +15,9 @@
 
 int sck_create ();
 int sck_bind (const int sck, const uint16_t port);
-int sck_send (const int sck, const struct sockaddr_in *saddr, const char *buf, const size_t buf_len);
+ssize_t sck_send (const int sck, const struct sockaddr_in *saddr, const char *buf, const size_t buf_len);
 ssize_t sck_recv (const int sck, char *buf, const size_t buf_max, const struct sockaddr_in *saddr);
+int sck_create_saddr (struct sockaddr_in *saddr, const char *addr, const char *port);
+int sck_wait_for_request (const int sck, const time_t delay, void *cb_data, int (*callback) (int, void *));
 
 #endif

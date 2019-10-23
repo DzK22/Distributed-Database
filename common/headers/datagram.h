@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <stdint.h>
+#include <math.h>
 #include "sck.h"
 
 #define DG_DATA_MAX 65536 // octets
@@ -27,6 +28,7 @@
 // RRES = Relais -> Client
 // NRES = Noeud -> Relais
 // -------------------------
+#define ACK 0
 // CREQ
 #define CREQ_AUTH 1
 #define CREQ_READ 2
@@ -40,35 +42,33 @@
 #define RREQ_DATA 9
 #define RREQ_SYNC 10
 #define RREQ_DESTROY 11
-// NRES
-#define NRES_READ -1
-#define NRES_WRITE -2
-#define NRES_DELETE -3
-#define NRES_DATA -4
-#define NRES_SYNC -5
 // NREQ
-#define NREQ_LOGOUT -6
+#define NREQ_LOGOUT 12
+// NRES
+#define NRES_READ 20
+#define NRES_WRITE 21
+#define NRES_DELETE 22
+#define NRES_DATA 23
+#define NRES_SYNC 24
 // RRES
-#define RRES_AUTH -7
-#define RRES_READ -8
-#define RRES_WRITE -9
-#define RRES_DELETE -10
-// ACK
-#define ACK 0
+#define RRES_AUTH 25
+#define RRES_READ 26
+#define RRES_WRITE 27
+#define RRES_DELETE 28
 
 // status
-#define SUC_DELETE 3
-#define SUC_WRITE 2
-#define SUC_AUTH 1
-#define NORMAL 0
-#define ERR_NOREPLY -1
-#define ERR_AUTHFAILED -2
-#define ERR_NOPERM -3
-#define ERR_NONODE -4
-#define ERR_SYNTAX -5
-#define ERR_UNKNOWFIELD -6
-#define ERR_WRITE -7
-#define ERR_DELETE -8
+#define SUC_DELETE 40
+#define SUC_WRITE 41
+#define SUC_AUTH 42
+#define NORMAL 43
+#define ERR_NOREPLY 44
+#define ERR_AUTHFAILED 45
+#define ERR_NOPERM 46
+#define ERR_NONODE 47
+#define ERR_SYNTAX 48
+#define ERR_UNKNOWFIELD 49
+#define ERR_WRITE 50
+#define ERR_DELETE 51
 
 typedef struct dgram_s {
     // en-tête (2 premiers octets = indiquer debut en-tête)
@@ -91,10 +91,13 @@ typedef struct dgram_s {
 int dgram_add_from_raw (dgram **dglist,void *raw, const size_t raw_size, const struct sockaddr_in *saddr);
 dgram * dgram_del_from_ack (dgram *dglist, const uint16_t ack);
 bool dgram_is_ready (dgram *dg);
-int dgram_print_status (const dgram *dg);
+int dgram_print_status (const uint8_t request);
 int dgram_check_timeout_delete (dgram **dglist);
 int dgram_check_timeout_resend (const int sock, dgram **dglist);
-int dgram_resend (const int sock, dgram *dg);
 unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2);
+uint16_t dgram_checksum (const dgram *dg);
+int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint16_t data_size, char *data);
+dgram * dgram_add (dgram *dglist, dgram *dg);
+int dgram_send (const int sck, dgram *dg, dgram **dg_sent);
 
 #endif

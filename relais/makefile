@@ -6,7 +6,7 @@ OBJ_DIR = obj/
 HD_DIR = headers/
 DOC_DIR = doc/
 
-$(EXEC): $(OBJ_DIR)$(EXEC).o $(OBJ_DIR)relais.o
+$(EXEC): $(OBJ_DIR)$(EXEC).o $(OBJ_DIR)relais.o ../common/obj/sck.o ../common/obj/datagram.o
 	$(CC) -o $(EXEC) $^ $(CFLAGS)
 
 $(OBJ_DIR)$(EXEC).o: $(SRC_DIR)$(EXEC).c $(HD_DIR)relais.h

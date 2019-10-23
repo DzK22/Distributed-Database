@@ -1,15 +1,15 @@
 #include "../headers/datagram.h"
 
-int dgram_print_status (const dgram *dg)
+int dgram_print_status (const uint8_t status)
 {
-    if (dg->status < 0) // error
+    if (status > NORMAL) // error
         printf("\033[91mErreur: "); // red
-    else if (dg->status > 0)
+    else if (status < NORMAL)
         printf("\033[92mSuccès: "); // green
-    else // n == 0
+    else // == NORMAL
         printf("\033[96m"); // cyan
 
-    switch (dg->status) {
+    switch (status) {
         case SUC_DELETE:
             printf("La suppression a réussie");
             break;
@@ -184,7 +184,7 @@ unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2) // le plus réc
 
 int dgram_check_timeout_delete (dgram **dglist)
 {
-    dgram *dg = *dglist, *old = NULL;    
+    dgram *dg = *dglist, *old = NULL;
     struct timeval now;
     if (gettimeofday(&now, NULL) == -1) {
         perror("gettimeofday");
@@ -195,7 +195,7 @@ int dgram_check_timeout_delete (dgram **dglist)
             // supprimer ce dgram
             if (old == NULL)
                 *dglist = dg->next;
-            else 
+            else
                 old->next = dg->next;
             free(dg->data);
             free(dg);
@@ -211,7 +211,7 @@ int dgram_check_timeout_delete (dgram **dglist)
 
 int dgram_check_timeout_resend (const int sock, dgram **dglist)
 {
-    dgram *dg = *dglist;    
+    dgram *dg = *dglist;
     struct timeval now;
     if (gettimeofday(&now, NULL) == -1) {
         perror("gettimeofday");
@@ -220,10 +220,9 @@ int dgram_check_timeout_resend (const int sock, dgram **dglist)
     while (dg != NULL) {
         if (time_ms_diff(&now, &dg->creation_time) > DG_RESEND_TIMEOUT) {
             // réenvoyer ce dgram et actualiser le temps
-            if (dgram_resend (sock, dg) == -1)
+            if (dgram_send(sock, dg, dglist) == -1)
                 return -1;
         }
-
         dg = dg->next;
     }
 
@@ -232,6 +231,7 @@ int dgram_check_timeout_resend (const int sock, dgram **dglist)
 
 int dgram_create_raw (const dgram *dg, void *buf, size_t buf_size)
 {
+    // seulement id, request, status, data_size et checksum doivent êtres remplis (HEADER)
     if (buf_size < ((size_t) (DG_HEADER_SIZE + dg->data_len))) {
         fprintf(stderr, "dgram_create_raw size error\n");
         return -1;
@@ -248,15 +248,60 @@ int dgram_create_raw (const dgram *dg, void *buf, size_t buf_size)
     return 0;
 }
 
-int dgram_resend (const int sock, dgram *dg)
+int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint16_t data_size, char *data)
 {
+    dg->id = id;
+    dg->request = request;
+    dg->status = status;
+    dg->data_size = data_size;
+    dg->data = malloc(data_size);
+    if (dg->data == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    memcpy(dg->data, data, data_size);
+    dg->data_len = data_size;
+    dg->checksum = dgram_checksum(dg);
+
+    return 0;
+}
+
+uint16_t dgram_checksum (const dgram *dg)
+{
+    // champs minimum devant êtres remplis dans dg:
+    // data, data_size
+    // le dg doit etre complet (data_size == data_len)
+    long long unsigned sum = 0;
+    char c;
+    unsigned i;
+    for (i = 0; i < dg->data_size; i ++) {
+        c = dg->data[i];
+        sum += c * i;
+    }
+
+    return (uint16_t) (sum % ((long long unsigned) pow(2, 16)));
+}
+
+dgram * dgram_add (dgram *dglist, dgram *dg) // /!/ dg doit avoir été alloué avec malloc
+{
+    if (dglist == NULL)
+        return dg;
+    dg->next = dglist;
+    return dg;
+}
+
+int dgram_send (const int sck, dgram *dg, dgram **dg_sent)
+{
+    *dg_sent = dgram_add(*dg_sent, dg);
+
     struct sockaddr_in saddr;
+    saddr.sin_family = AF_INET;
     saddr.sin_addr.s_addr = dg->addr;
     saddr.sin_port = dg->port;
     char buf[DG_DATA_MAX + DG_HEADER_SIZE];
     if (dgram_create_raw(dg, buf, DG_DATA_MAX + DG_HEADER_SIZE) == -1)
         return -1;
-    if (sck_send(sock, &saddr, buf, dg->data_len + DG_HEADER_SIZE) == -1)
+    if (sck_send(sck, &saddr, buf, dg->data_len + DG_HEADER_SIZE) == -1)
         return -1;
 
     return 0;

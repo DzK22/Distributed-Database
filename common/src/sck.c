@@ -25,7 +25,7 @@ int sck_bind (const int sock, const uint16_t port) // format hote
     return 0;
 }
 
-int sck_send (const int sck, const struct sockaddr_in *saddr, const char *buf, const size_t buf_len)
+ssize_t sck_send (const int sck, const struct sockaddr_in *saddr, const char *buf, const size_t buf_len)
 {
     ssize_t bytes;
     size_t total = 0;
@@ -38,7 +38,7 @@ int sck_send (const int sck, const struct sockaddr_in *saddr, const char *buf, c
         return -1;
     }
 
-    return 0;
+    return total;
 }
 
 ssize_t sck_recv (const int sck, char *buf, const size_t buf_max, const struct sockaddr_in *saddr)
@@ -51,4 +51,59 @@ ssize_t sck_recv (const int sck, char *buf, const size_t buf_max, const struct s
     }
 
     return bytes;
+}
+
+int sck_create_saddr (struct sockaddr_in *saddr, const char *addr, const char *port)
+{
+    saddr->sin_family = AF_INET;
+    saddr->sin_port = htons(atoi(port));
+
+    int res = inet_pton(AF_INET, addr, &saddr->sin_addr);
+    if (res == -1) {
+        perror("inet_pton error");
+        return -1;
+    } else if (res == 0) {
+        fprintf(stderr, "inet_pton: src is not an valid ipv4 address\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int sck_wait_for_request (const int sck, const time_t delay, void *cb_data, int (*callback) (int, void *)) // wait for sck and stdin
+{
+    fd_set fdset;
+    struct timeval tv;
+    tv.tv_sec = delay;
+    tv.tv_usec = 0;
+    int sel, max = sck + 1;
+
+    while (1) {
+        FD_ZERO(&fdset);
+        FD_SET(0, &fdset);
+        FD_SET(sck, &fdset);
+        sel = select(max, &fdset, NULL, NULL, &tv);
+
+        switch (sel) {
+            case -1:
+                perror("select error");
+                return -1;
+
+            case 0:
+                fprintf(stderr, "Timeout reached\n");
+                return -1;
+
+            default:
+                if (FD_ISSET(0, &fdset)) {
+                    if (callback(0, cb_data) == -1)
+                        return -1;
+                }
+                if (FD_ISSET(sck, &fdset)) {
+                    if (callback(sck, cb_data) == -1)
+                        return -1;
+                }
+        }
+    }
+
+    return -1;
 }
