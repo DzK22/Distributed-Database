@@ -26,15 +26,28 @@ int main (int argc, char **argv)
     if (sck_create_saddr(&relais_saddr, relais_ip, relais_port) == -1)
         return EXIT_FAILURE;
 
-    reqdata rd;
-    rd.sck = sck;
-    rd.relais_saddr = &relais_saddr;
-    rd.dg_sent = NULL;
-    rd.dg_received = NULL;
-    rd.id_counter = 0;
-    if (authentificate(login, password, &rd) == -1)
+    clientdata cdata;
+    cdata.sck = sck;
+    cdata.relais_saddr = &relais_saddr;
+    cdata.dg_sent = NULL;
+    cdata.dg_received = NULL;
+    cdata.id_counter = 0;
+    cdata.is_auth = false;
+
+    // start thread
+    pthread_t th;
+    thread_targ targ;
+    targ.sck = cdata.sck;
+    targ.dgsent = &cdata.dg_sent;
+    targ.dgreceived = &cdata.dg_received;
+    if ((errno = pthread_create(&th, NULL, thread_timeout_loop, &targ)) != 0) {
+        perror("pthread_create");
         return EXIT_FAILURE;
-    sck_wait_for_request(sck, 600, &rd, on_request);
+    }
+
+    if (send_auth(login, password, &cdata) == -1)
+        return EXIT_FAILURE;
+    sck_wait_for_request(sck, 60000, &cdata, on_request);
 
     return EXIT_FAILURE;
 }

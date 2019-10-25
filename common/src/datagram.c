@@ -54,7 +54,12 @@ int dgram_print_status (const uint8_t status)
     return 0;
 }
 
-int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, const struct sockaddr_in *saddr)
+bool dgram_is_ready (dgram *dg)
+{
+    return dg->data_len == dg->data_size;
+}
+
+int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, dgram *curdg, const struct sockaddr_in *saddr)
 {
     // ici parser le paquet brut. si un paquet avec meme ip, port, request, status, existe deja, concatener le data avec l'actuel.
     // sinon, creer un nouveau paquet
@@ -76,6 +81,7 @@ int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, const 
                 // concatener le data
                 const size_t n = (((int) raw_size) > (((int) dg->data_size) - ((int) dg->data_len))) ? ((int) dg->data_size) - ((int) dg->data_len) : ((int) raw_size);
                 memcpy(dg->data + dg->data_len, raw, n);
+                *curdg = *dg;
                 return 0;
             }
             dg = dg->next;
@@ -103,6 +109,7 @@ int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, const 
             perror("malloc");
             return -1;
         }
+        memcpy(new_dg->data, &(((const char *) raw)[10]), new_dg->data_len);
 
         if (gettimeofday(&new_dg->creation_time, NULL) == -1) {
             perror("gettimeofday");
@@ -112,6 +119,7 @@ int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, const 
         new_dg->port = saddr->sin_port;
         new_dg->next = *dglist;
         *dglist = new_dg;
+        *curdg = *new_dg;
     }
 
     return 0;
@@ -182,9 +190,9 @@ unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2) // le plus réc
    return (tv1->tv_sec - tv2->tv_sec) * 1000 - (tv1->tv_usec - tv2->tv_usec) / 1000;
 }
 
-int dgram_check_timeout_delete (dgram **dglist)
+int dgram_check_timeout_delete (dgram **dgsent)
 {
-    dgram *dg = *dglist, *old = NULL;
+    dgram *dg = *dgsent, *old = NULL;
     struct timeval now;
     if (gettimeofday(&now, NULL) == -1) {
         perror("gettimeofday");
@@ -194,7 +202,7 @@ int dgram_check_timeout_delete (dgram **dglist)
         if (time_ms_diff(&now, &dg->creation_time) > DG_DELETE_TIMEOUT) {
             // supprimer ce dgram
             if (old == NULL)
-                *dglist = dg->next;
+                *dgsent = dg->next;
             else
                 old->next = dg->next;
             free(dg->data);
@@ -209,9 +217,9 @@ int dgram_check_timeout_delete (dgram **dglist)
 }
 
 
-int dgram_check_timeout_resend (const int sock, dgram **dglist)
+int dgram_check_timeout_resend (const int sock, dgram **dgsent)
 {
-    dgram *dg = *dglist;
+    dgram *dg = *dgsent;
     struct timeval now;
     if (gettimeofday(&now, NULL) == -1) {
         perror("gettimeofday");
@@ -220,7 +228,7 @@ int dgram_check_timeout_resend (const int sock, dgram **dglist)
     while (dg != NULL) {
         if (time_ms_diff(&now, &dg->creation_time) > DG_RESEND_TIMEOUT) {
             // réenvoyer ce dgram et actualiser le temps
-            if (dgram_send(sock, dg, dglist) == -1)
+            if (dgram_send(sock, dg, dgsent) == -1)
                 return -1;
         }
         dg = dg->next;
@@ -248,11 +256,13 @@ int dgram_create_raw (const dgram *dg, void *buf, size_t buf_size)
     return 0;
 }
 
-int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint16_t data_size, char *data)
+int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, char *data)
 {
     dg->id = id;
     dg->request = request;
     dg->status = status;
+    dg->addr = addr;
+    dg->port = port;
     dg->data_size = data_size;
     dg->data = malloc(data_size);
     if (dg->data == NULL) {
@@ -306,3 +316,21 @@ int dgram_send (const int sck, dgram *dg, dgram **dg_sent)
 
     return 0;
 }
+
+void * thread_timeout_loop (void *arg) // arg = thread_targ
+{
+    thread_targ *targ = arg;
+    while (1) {
+        if (usleep(100) == -1) {
+            perror("usleep");
+            return NULL;
+        }
+        if (dgram_check_timeout_delete(targ->dgreceived) == -1)
+            return NULL;
+        if (dgram_check_timeout_resend(targ->sck, targ->dgsent) == -1)
+            return NULL;
+    }
+
+    return NULL;
+}
+

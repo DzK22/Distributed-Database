@@ -20,17 +20,20 @@
 #include "../../common/headers/datagram.h"
 #include "../../common/headers/sck.h"
 
-typedef struct reqdata_s {
+typedef struct clientdata_s {
     int sck;
     struct sockaddr_in *relais_saddr;
     dgram *dg_sent;
     dgram *dg_received;
     uint16_t id_counter;
-} reqdata;
+    bool is_auth;
+} clientdata;
 
 int on_request (int fd, void *data);
-int read_stdin (reqdata *rd);
-int read_sck (reqdata *rd);
-int authentificate (const char *login, const char *password, reqdata *rd);
+int read_stdin (clientdata *cdata);
+int read_sck (clientdata *cdata);
+int send_auth (const char *login, const char *password, clientdata *cdata);
+int exec_dg (const dgram *dg, clientdata *cdata);
+void print_read_res (const dgram *dg);
 
 #endif

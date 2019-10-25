@@ -1,5 +1,5 @@
 CC = gcc -g
-CFLAGS = -Wall -Werror -Wextra
+CFLAGS = -Wall -Werror -Wextra -pthread
 SRC_DIR = src/
 OBJ_DIR = obj/
 HD_DIR = headers/

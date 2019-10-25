@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -59,16 +60,17 @@
 // status
 #define SUC_DELETE 40
 #define SUC_WRITE 41
-#define SUC_AUTH 42
-#define NORMAL 43
-#define ERR_NOREPLY 44
-#define ERR_AUTHFAILED 45
-#define ERR_NOPERM 46
-#define ERR_NONODE 47
-#define ERR_SYNTAX 48
-#define ERR_UNKNOWFIELD 49
-#define ERR_WRITE 50
-#define ERR_DELETE 51
+#define SUC_READ 42
+#define SUC_AUTH 43
+#define NORMAL 44
+#define ERR_NOREPLY 45
+#define ERR_AUTHFAILED 46
+#define ERR_NOPERM 47
+#define ERR_NONODE 48
+#define ERR_SYNTAX 49
+#define ERR_UNKNOWFIELD 50
+#define ERR_WRITE 51
+#define ERR_DELETE 52
 
 typedef struct dgram_s {
     // en-tête (2 premiers octets = indiquer debut en-tête)
@@ -88,16 +90,25 @@ typedef struct dgram_s {
 } dgram;
 // dgram ready quand data_len == data_size !
 
-int dgram_add_from_raw (dgram **dglist,void *raw, const size_t raw_size, const struct sockaddr_in *saddr);
+typedef struct {
+    int sck;
+    dgram **dgsent;
+    dgram **dgreceived;
+} thread_targ;
+
+int dgram_add_from_raw (dgram **dglist,void *raw, const size_t raw_size, dgram *curdg, const struct sockaddr_in *saddr);
 dgram * dgram_del_from_ack (dgram *dglist, const uint16_t ack);
+dgram * dgram_del_from_id (dgram *dglist, const uint16_t ack);
 bool dgram_is_ready (dgram *dg);
 int dgram_print_status (const uint8_t request);
-int dgram_check_timeout_delete (dgram **dglist);
-int dgram_check_timeout_resend (const int sock, dgram **dglist);
+int dgram_check_timeout_delete (dgram **dgreceived);
+int dgram_check_timeout_resend (const int sock, dgram **dgsent);
 unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2);
 uint16_t dgram_checksum (const dgram *dg);
-int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint16_t data_size, char *data);
+int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, char *data);
 dgram * dgram_add (dgram *dglist, dgram *dg);
 int dgram_send (const int sck, dgram *dg, dgram **dg_sent);
+void * thread_timeout_loop (void *arg);
+bool dgram_is_ready (dgram *dg);
 
 #endif
