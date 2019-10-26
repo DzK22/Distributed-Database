@@ -29,8 +29,8 @@ int main (int argc, char **argv)
     clientdata cdata;
     cdata.sck = sck;
     cdata.relais_saddr = &relais_saddr;
-    cdata.dg_sent = NULL;
-    cdata.dg_received = NULL;
+    cdata.dgsent = NULL;
+    cdata.dgreceived = NULL;
     cdata.id_counter = 0;
     cdata.is_auth = false;
 
@@ -38,16 +38,17 @@ int main (int argc, char **argv)
     pthread_t th;
     thread_targ targ;
     targ.sck = cdata.sck;
-    targ.dgsent = &cdata.dg_sent;
-    targ.dgreceived = &cdata.dg_received;
+    targ.dgsent = &cdata.dgsent;
+    targ.dgreceived = &cdata.dgreceived;
     if ((errno = pthread_create(&th, NULL, thread_timeout_loop, &targ)) != 0) {
         perror("pthread_create");
         return EXIT_FAILURE;
     }
 
+    printf(" > Tentative de connexion au serveur ...\n");
     if (send_auth(login, password, &cdata) == -1)
         return EXIT_FAILURE;
-    sck_wait_for_request(sck, 60000, &cdata, on_request);
 
+    sck_wait_for_request(sck, 60, &cdata, fd_can_read);
     return EXIT_FAILURE;
 }

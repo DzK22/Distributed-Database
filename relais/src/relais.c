@@ -4,232 +4,474 @@
  * \author François et Danyl
  */
 
-
 #include "../headers/relais.h"
 
-int socket_create ()
+int fd_can_read (int fd, void *data)
 {
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == -1) {
-        perror("socket creation error");
-        return -1;
+    relaisdata *rdata = ((relaisdata *) data);
+    if (fd == rdata->sck) {
+        if (read_sck(rdata) == -1)
+            return -1;
     }
-    return sock;
-}
 
-int candbind (const int sockfd, struct sockaddr_in *addr, const char *port)
-{
-    addr->sin_addr.s_addr = INADDR_ANY;
-    addr->sin_family = AF_INET;
-    addr->sin_port = htons(atoi(port));
-    socklen_t len = sizeof(struct sockaddr_in);
-
-    int bd = bind(sockfd, (struct sockaddr *) addr, len);
-    if (bd == -1) {
-        perror("bind error");
-        return -1;
-    }
     return 0;
 }
 
-ssize_t send_toclient (const int sockfd, void *msg, struct sockaddr_in *client)
+int read_sck (relaisdata *rdata)
 {
-    socklen_t len = sizeof(struct sockaddr_in);
-    ssize_t bytes = sendto(sockfd, msg, N, 0, (struct sockaddr *) client, len);
-    if (bytes == -1) {
-        perror("sendto error");
+    void *buf = malloc(SCK_DATAGRAM_MAX);
+    if (buf == NULL) {
+        perror("malloc");
         return -1;
     }
-    return bytes;
-}
+    struct sockaddr_in saddr;
+    ssize_t bytes = sck_recv(rdata->sck, buf, SCK_DATAGRAM_MAX, &saddr);
+    if (bytes == -1)
+        return -1;
 
-int wait_for_request (int sock, mugiwara *mugi)
-{
-    struct sockaddr_in clientaddr;
-    socklen_t clientaddr_len = sizeof(struct sockaddr_in);
-    ssize_t bytes;
-    char buff[N];
-    clientreq creq;
+    dgram dg;
+    if (dgram_add_from_raw(&rdata->dgreceived, buf, bytes, &dg, &saddr) == -1)
+        return -1;
+    free(buf);
+    dgram_debug(&dg);
 
-    while ((bytes = recvfrom(sock, buff, N - 1, 0, (struct sockaddr *) &clientaddr, &clientaddr_len)) >= 0) {
-        buff[bytes] = '\0';
-        switch (parse_datagram(buff, &creq, &clientaddr)) {
-            case -1:
+    if (dgram_is_ready(&dg)) {
+        printf("is rdy\n");
+        // SEND ACK
+        if (dg.request != ACK) {
+            dgram *ack = malloc(sizeof(dgram));
+            if (ack == NULL) {
+                perror("malloc");
                 return -1;
-            case 1: // not program error, only incorrect message received
-                continue;
+            }
+            if (dgram_create(ack, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
+                return -1;
+            if (dgram_send(rdata->sck, ack, &rdata->dgsent) == -1)
+                return -1;
         }
 
-        if (exec_client_request(sock, &creq, mugi) == -1)
+        if (exec_dg(&dg, rdata) == -1)
             return -1;
+        // supprimer ce dg
+        if (!dgram_del_from_id(&rdata->dgreceived, dg.id))
+            return 1;
     }
 
-    perror("recvfrom");
-    return -1;
+    return 0;
 }
 
-int parse_datagram (char *data, clientreq *cr, struct sockaddr_in *client) // data should be null terminated
+int exec_dg (const dgram *dg, relaisdata *rdata)
 {
-    printf("Nouvelle requete recue: %s\n", data);
-    char tmp[N];
-    errno = 0;
-    if (sscanf(data, "%s %s;", tmp, cr->message) != 2) {
-        if (errno != 0) {
-            perror("sscanf error");
+    switch (dg->request) {
+        case CREQ_AUTH:
+            if (exec_creq_auth(dg, rdata) == -1)
+                return -1;
+            break;
+        case CREQ_READ:
+            if (exec_creq_read(dg, rdata) == -1)
+                return -1;
+            break;
+        case CREQ_WRITE:
+            if (exec_creq_write(dg, rdata) == -1)
+                return -1;
+            break;
+        case CREQ_DELETE:
+            if (exec_creq_delete(dg, rdata) == -1)
+                return -1;
+            break;
+        case CREQ_LOGOUT:
+            if (exec_creq_logout(dg, rdata) == -1)
+                return -1;
+            break;
+        case NREQ_LOGOUT:
+            if (exec_nreq_logout(dg, rdata) == -1)
+                return -1;
+            break;
+        case NREQ_MEET:
+            if (exec_nreq_meet(dg, rdata) == -1)
+                return -1;
+            break;
+        case NRES_READ:
+            if (exec_nres_read(dg, rdata) == -1)
+                return -1;
+            break;
+        case NRES_WRITE:
+            if (exec_nres_write(dg, rdata) == -1)
+                return -1;
+            break;
+        case NRES_DELETE:
+            if (exec_nres_delete(dg, rdata) == -1)
+                return -1;
+            break;
+        case NRES_GETDATA:
+            if (exec_nres_getdata(dg, rdata) == -1)
+                return -1;
+            break;
+        case NRES_SYNC:
+            if (exec_nres_sync(dg, rdata) == -1)
+                return -1;
+            break;
+        case ACK:
+            dgram_del_from_id(&rdata->dgsent, dg->id);
+            break;
+        default:
+            fprintf(stderr, "Paquet reçu avec requete non gérée par le relais: %d\n", dg->request);
+    }
+
+    return 0;
+}
+
+int exec_creq_auth (const dgram *dg, relaisdata *rdata)
+{
+    char *tmp;
+    printf("data len = %d\n", dg->data_len);
+    const char *login = strtok_r(dg->data, ":", &tmp);
+    const char *password = strtok_r(NULL, ":", &tmp);
+    if (!login || !password) {
+        dgram *newdg = malloc(sizeof(dgram));
+        if (newdg == NULL) {
+            perror("malloc");
             return -1;
         }
-        // else
-        fprintf(stderr, "cannot assing all sscanf items: %s\n", data);
-        return 1; // don't quit the program
+        if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, ERR_SYNTAX, dg->addr, dg->port, 0, NULL) == -1)
+            return -1;
+        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            return -1;
+       return 1;
     }
-    cr->saddr = *client;
-    if (strncmp(tmp, "auth", 5) == 0)
-        cr->type = Authentification;
-    else if (strncmp(tmp, "lire", 5) == 0)
-        cr->type = Read;
-    else if (strncmp(tmp, "ecrire", 7) == 0)
-        cr->type = Write;
-    else if (strncmp(tmp, "supprimer", 10) == 0)
-        cr->type = Delete;
-    else if (strncmp(tmp, "meet", 5) == 0)
-        cr->type = Meet; // REQUETE D'UN NOUVEAU NOEUD, PAS D'UN CLIENT !
-    else if (strncmp(tmp, "getallres", 10) == 0)
-        cr->type = Getallres; // IDEM
-    else if (strncmp(tmp, "readres", 8) == 0)
-        cr->type = Readres;
-    else {
-        printf("message avec mauvais type recu: %s\n", tmp);
+
+    char *flogin, *fpassword;
+    bool login_ok, password_ok;
+    size_t i;
+    for (i = 0; i < rdata->mugi->nb_users; i ++) {
+        flogin = rdata->mugi->users[i].login;
+        fpassword = rdata->mugi->users[i].mdp;
+        login_ok = strncmp(flogin, login, strlen(flogin)) == 0;
+        password_ok = strncmp(fpassword, password, strlen(fpassword)) == 0;
+
+        if (login_ok && password_ok) {
+            if (test_auth(login, rdata)) {
+                dgram *newdg = malloc(sizeof(dgram));
+                if (newdg == NULL) {
+                    perror("malloc");
+                    return -1;
+                }
+                if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, ERR_ALREADYAUTH, dg->addr, dg->port, 0, NULL) == -1)
+                    return -1;
+                if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+                    return -1;
+                return 1;
+            }
+
+            // OK
+            if (rdata->mugi->nb_hosts == 0) {
+                rdata->mugi->hosts = malloc(sizeof(auth_user) * H);
+                if (rdata->mugi->hosts == NULL) {
+                    perror("malloc");
+                    return -1;
+                }
+            }
+            if (rdata->mugi->nb_hosts >= rdata->mugi->max_hosts) {
+                rdata->mugi->max_hosts += H;
+                rdata->mugi->hosts = realloc(rdata->mugi->hosts, rdata->mugi->max_hosts);
+                if (rdata->mugi->hosts == NULL) {
+                    perror("realloc");
+                    return -1;
+                }
+            }
+
+            strncpy(rdata->mugi->hosts[rdata->mugi->nb_hosts].login, login, H);
+            struct sockaddr_in saddr;
+            saddr.sin_family = AF_INET;
+            saddr.sin_addr.s_addr = dg->addr;
+            saddr.sin_port = dg->port;
+
+            rdata->mugi->hosts[rdata->mugi->nb_hosts].saddr = saddr;
+            rdata->mugi->nb_hosts ++;
+
+            dgram *newdg = malloc(sizeof(dgram));
+            if (newdg == NULL) {
+                perror("malloc");
+                return -1;
+            }
+            if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, SUC_AUTH, dg->addr, dg->port, 0, NULL) == -1)
+                return -1;
+            if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+                return -1;
+
+            dgram_debug(newdg);
+            return 0;
+        }
+    }
+
+    dgram *newdg = malloc(sizeof(dgram));
+    if (newdg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, ERR_AUTHFAILED, dg->addr, dg->port, 0, NULL) == -1)
+        return -1;
+    if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+        return -1;
+
+    return 1;
+}
+
+int exec_creq_read (const dgram *dg, relaisdata *rdata)
+{
+    user *usr = read_has_rights(dg, rdata);
+    if (usr == NULL) { // PAS LES DROITS
+        dgram *newdg = malloc(sizeof(dgram));
+        if (newdg == NULL) {
+            perror("malloc");
+            return -1;
+        }
+        if (dgram_create(newdg, rdata->id_counter ++, RRES_READ, ERR_NOPERM, dg->addr, dg->port, 0, NULL) == -1)
+            return -1;
+        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            return -1;
+        return 1;
+    }
+
+    // recherche d'un noeud valide pour chaque champ de la requête
+    size_t i;
+    char *tmp, *field, buf[DG_DATA_MAX];
+    int val;
+    size_t cpt = 0, n_fields = 0;
+
+    field = strtok_r(dg->data, ",", &tmp);
+    while (field != NULL) {
+        n_fields ++;
+        for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
+            if (strncmp(field, rdata->mugi->nodes[i].field, strlen(field)) != 0)
+                continue;
+            if (!rdata->mugi->nodes[i].active)
+                continue;
+
+            // OK
+            val = snprintf(buf, DG_DATA_MAX, "%s:%s", usr->login, field);
+            if (val >= DG_DATA_MAX) {
+                fprintf(stderr, "snprintf truncate\n");
+                return 1;
+            } else if (val < 0) {
+                perror("snprintf");
+                return -1;
+            }
+
+            dgram *newdg = malloc(sizeof(dgram));
+            if (newdg == NULL) {
+                perror("malloc");
+                return -1;
+            }
+            if (dgram_create(newdg, rdata->id_counter ++, RREQ_READ, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, val, buf) == -1)
+                return -1;
+            if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+                return -1;
+            cpt ++;
+            break;
+        }
+
+        field = strtok_r(NULL, ",", &tmp);
+    }
+
+    if (n_fields != cpt) {
+        dgram *newdg = malloc(sizeof(dgram));
+        if (newdg == NULL) {
+            perror("malloc");
+            return -1;
+        }
+        if (dgram_create(newdg, rdata->id_counter ++, RRES_READ, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
+            return -1;
+        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            return -1;
         return 1;
     }
 
     return 0;
 }
 
-int exec_client_request (int sock, clientreq *cr, mugiwara *mugi)
+int exec_creq_write (const dgram *dg, relaisdata *rdata)
 {
-    user *usr;
-    //static int z = 0;
-    switch (cr->type) {
-        case Authentification:
-            printf("Authentification => %s\n", cr->message);
-            if (authentification(cr, mugi)) {
-                printf("success\n");
-                if (send_toclient(sock, "0", &cr->saddr) == -1)
-                    return -1;
-            } else {
-                printf("failed\n");
-                if (send_toclient(sock, "-1", &cr->saddr) == -1)
-                    return -1;
-            }
-            break;
-        case Read:
-            usr = read_has_rights(cr, mugi);
-            if (usr == NULL)
-                return 1;
-            if (node_read_request(sock, cr, mugi, usr) == -1)
-                return -1;
-            break;
-        case Write:
-            usr = get_user_from_req(cr, mugi);
-            if (usr == NULL)
-                return 1;
-            if (node_write_request(sock, cr, mugi, usr) == -1)
-                return -1;
-            break;
-        case Delete:
-            usr = get_user_from_req(cr, mugi);
-            if (usr == NULL)
-                return 1;
-            if (node_delete_request(sock, cr, mugi, usr) == -1)
-                return -1;
-            break;
-        case Meet: // REQUETE D'UN NOEUD, PAS D'UN CLIENT
-            if (meet_new_node(sock, cr, mugi) == -1)
-                return -1;
-            break;
-        case Getallres: // IDEM
-            if (follow_getallres(sock, cr, mugi) == -1)
-                return -1;
-            break;
-        case Readres: // IDEM (réponse de la requete read du relais vers le noeud)
-            if (follow_readres(sock, cr, mugi) == -1)
-                return -1;
-            break;
-        default:
-            fprintf(stderr, "Requête non reconnue\n");
-            return 1;
-    }
+    (void) dg, (void) rdata;
+
     return 0;
 }
 
-auth_user * get_auth_user_from_login (const char *login, mugiwara *mugi)
+int exec_creq_delete (const dgram *dg, relaisdata *rdata)
 {
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+int exec_creq_logout (const dgram *dg, relaisdata *rdata)
+{
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+int exec_nreq_logout (const dgram *dg, relaisdata *rdata)
+{
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+int exec_nreq_meet (const dgram *dg, relaisdata *rdata)
+{
+    // send confirmation
+    dgram *newdg = malloc(sizeof(dgram));
+    if (newdg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    if (dgram_create(newdg, rdata->id_counter ++, RNRES_MEET, SUC_MEET, dg->addr, dg->port, 0, NULL) == -1)
+        return -1;
+    if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+        return -1;
+
+    if (rdata->mugi->nb_nodes >= rdata->mugi->max_nodes) {
+        rdata->mugi->max_nodes += H;
+        rdata->mugi->nodes = realloc(rdata->mugi->nodes, sizeof(node) * rdata->mugi->max_nodes);
+        if (rdata->mugi->nodes == NULL) {
+            perror("realloc");
+            return -1;
+        }
+    }
+
+    // ajouter le noeud
+    struct sockaddr_in saddr;
+    saddr.sin_family = AF_INET;
+    saddr.sin_addr.s_addr = dg->addr;
+    saddr.sin_port = dg->port;
+    strncpy(rdata->mugi->nodes[rdata->mugi->nb_nodes].field, dg->data, MAX_ATTR);
+    rdata->mugi->nodes[rdata->mugi->nb_nodes].saddr = saddr;
+    rdata->mugi->nodes[rdata->mugi->nb_nodes].id = rdata->mugi->node_id_counter;
+    rdata->mugi->nodes[rdata->mugi->nb_nodes].active = true;
+    rdata->mugi->nb_nodes ++;
+    rdata->mugi->node_id_counter ++;
+
+    // si un noeud du meme type existe deja, ecraser les données du nouveau noeud par les siennes (surement plus à jour) envoie message a ce noeud pour lui demander toutes ses donnees
     size_t i;
-    size_t login_len = strlen(login);
-    for (i = 0; i < mugi->nb_hosts; i ++) {
-       if (strncmp(login, mugi->hosts[i].login, login_len) == 0)
-           return &mugi->hosts[i];
+    for (i = 0; i < (rdata->mugi->nb_nodes - 1); i ++) {
+        if (strncmp(dg->data, rdata->mugi->nodes[i].field, MAX_ATTR) == 0) {
+            // bloquer temporairement le noeud car n'a pas les données a jour
+            rdata->mugi->nodes[rdata->mugi->nb_nodes - 1].active = false;
+            char msg[N];
+            if (sprintf(msg, "getall %lu;", rdata->mugi->node_id_counter - 1) < 0) {
+                fprintf(stderr, "sprintf error\n");
+                return -1;
+            }
+
+            // SEND MSG GETDATA TO THIS NODE
+        }
+    }
+
+    return 0;
+}
+
+int exec_nres_read (const dgram *dg, relaisdata *rdata)
+{
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+int exec_nres_write (const dgram *dg, relaisdata *rdata)
+{
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+int exec_nres_delete (const dgram *dg, relaisdata *rdata)
+{
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+int exec_nres_getdata (const dgram *dg, relaisdata *rdata)
+{
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+int exec_nres_sync (const dgram *dg, relaisdata *rdata)
+{
+    (void) dg, (void) rdata;
+
+    return 0;
+}
+
+auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata)
+{
+    size_t i, login_len = strlen(login);
+    for (i = 0; i < rdata->mugi->nb_hosts; i ++) {
+       if (strncmp(login, rdata->mugi->hosts[i].login, login_len) == 0)
+           return &rdata->mugi->hosts[i];
     }
 
     return NULL;
 }
 
-node * get_field_from_node (clientreq *creq, mugiwara *mugi)
+node * get_node_field_from_dg (const dgram *dg, const relaisdata *rdata)
 {
   size_t i;
   bool ip_ok, port_ok;
-  for (i = 0; i < mugi->nb_nodes; i ++)
+  for (i = 0; i < rdata->mugi->nb_nodes; i ++)
   {
-    ip_ok = creq->saddr.sin_addr.s_addr == mugi->nodes[i].saddr.sin_addr.s_addr;
+    ip_ok = dg->addr == rdata->mugi->nodes[i].saddr.sin_addr.s_addr;
     if (!ip_ok)
         continue;
-    port_ok = creq->saddr.sin_port == mugi->nodes[i].saddr.sin_port;
+    port_ok = dg->port == rdata->mugi->nodes[i].saddr.sin_port;
     if (!port_ok)
         continue;
 
-    return &mugi->nodes[i];
+    return &rdata->mugi->nodes[i];
   }
   return NULL;
 }
 
-user * get_user_from_req (clientreq *creq, mugiwara *mugi)
+user * get_user_from_dg (const dgram *dg, const relaisdata *rdata)
 {
     // verifie que le user qui correspond a la requete est bien connecté sinon NULL
     size_t i;
     bool ip_ok, port_ok;
-    for (i = 0; i < mugi->nb_hosts; i ++) {
-        ip_ok = creq->saddr.sin_addr.s_addr == mugi->hosts[i].saddr.sin_addr.s_addr;
+    for (i = 0; i < rdata->mugi->nb_hosts; i ++) {
+        ip_ok = dg->addr == rdata->mugi->hosts[i].saddr.sin_addr.s_addr;
         if (!ip_ok)
             continue;
-        port_ok = creq->saddr.sin_port == mugi->hosts[i].saddr.sin_port;
+        port_ok = dg->port == rdata->mugi->hosts[i].saddr.sin_port;
         if (!port_ok)
             continue;
         // OK
-        const char *login = mugi->hosts[i].login;
+        const char *login = rdata->mugi->hosts[i].login;
         const size_t login_len = strlen(login);
         // search for the corresponding user in the users array
-        for (i = 0; i < mugi->nb_users; i ++) {
-            if (strncmp(login, mugi->users[i].login, login_len) == 0)
-                return &mugi->users[i];
+        for (i = 0; i < rdata->mugi->nb_users; i ++) {
+            if (strncmp(login, rdata->mugi->users[i].login, login_len) == 0)
+                return &rdata->mugi->users[i];
         }
     }
 
     return NULL;
 }
 
-user * read_has_rights (clientreq *creq, mugiwara *mugi)
+user * read_has_rights (const dgram *dg, const relaisdata *rdata)
 {
-    user *usr = get_user_from_req(creq, mugi);
+    user *usr = get_user_from_dg(dg, rdata);
     if (!usr) {
         return NULL;
     }
 
     bool found;
-    char *tmp, *attr;
+    char *tmp, *attr, data_cpy[DG_DATA_MAX];
     size_t i, attr_len;
-    char crmess_cpy[N];
-    strcpy(crmess_cpy, creq->message);
-    attr = strtok_r(crmess_cpy, ",", &tmp);
+    strncpy(data_cpy, dg->data, dg->data_len);
+    attr = strtok_r(data_cpy, ",", &tmp);
     while (attr != NULL) {
         attr_len = strlen(attr) + 1; // with \0
         found = false;
@@ -241,73 +483,19 @@ user * read_has_rights (clientreq *creq, mugiwara *mugi)
             }
         }
         if (!found) {
-            printf("has right FALSE\n");
             return NULL;
         }
         attr = strtok_r(NULL, ",", &tmp);
     }
 
-    printf("has right TRUE\n");
     return usr;
 }
 
-bool authentification (clientreq *creq, mugiwara *mugi)
+bool test_auth (const char *login, const relaisdata *rdata)
 {
-    char *tmp;
-    const char *login = strtok_r(creq->message, ":", &tmp);
-    const char *password = strtok_r(NULL, ":", &tmp);
-    if (!login || !password) {
-        fprintf(stderr, "Authentification error: login or password is missing\n");
-        return false;
-    }
-    char *flogin, *fpassword;
-    bool login_ok, password_ok;
-    size_t i;
-    for (i = 0; i < mugi->nb_users; i++)
-    {
-        flogin = mugi->users[i].login;
-        fpassword = mugi->users[i].mdp;
-        login_ok = strncmp(flogin, login, strlen(flogin)) == 0;
-        password_ok = strncmp(fpassword, password, strlen(fpassword)) == 0;
-        if (login_ok && password_ok)
-        {
-            if (test_auth(mugi, login))
-                return false;
-
-            if (mugi->nb_hosts == 0)
-            {
-                mugi->hosts = malloc(sizeof(auth_user) * H);
-                if (mugi->hosts == NULL)
-                {
-                    perror("malloc error");
-                    return EXIT_FAILURE;
-                }
-            }
-            if (mugi->nb_hosts >= mugi->max_hosts)
-            {
-                mugi->max_hosts += H;
-                mugi->hosts = realloc(mugi->hosts, mugi->max_hosts);
-                if (mugi->hosts == NULL)
-                {
-                    perror("realloc error");
-                    return false;
-                }
-            }
-            strncpy(mugi->hosts[mugi->nb_hosts].login, login, strlen(login));
-            mugi->hosts[mugi->nb_hosts].saddr = creq->saddr;
-            mugi->nb_hosts ++;
-            return true;
-        }
-    }
-    return false;
-}
-
-bool test_auth(mugiwara *mugi, const char *log)
-{
-    size_t i;
-    for (i = 0; i < mugi->nb_hosts; i++)
-    {
-        if (strncmp(log, mugi->hosts[i].login, strlen(log)) == 0)
+    size_t i, login_len = strlen(login);
+    for (i = 0; i < rdata->mugi->nb_hosts; i ++) {
+        if (strncmp(login, rdata->mugi->hosts[i].login, login_len) == 0)
             return true;
     }
     return false;
@@ -393,6 +581,7 @@ mugiwara *init_mugiwara ()
     return mugi;
 }
 
+/*
 int meet_new_node (const int sock, clientreq *creq, mugiwara *mugi)
 {
     // send confirmation
@@ -522,52 +711,6 @@ int node_write_request (const int sock, clientreq *creq, mugiwara *mugi, user *u
     return 0;
 }
 
-int node_read_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
-{
-    // recherche d'un noeud valide pour chaque champ de la reqûete
-    size_t i;
-    char *tmp, *field, buf[N];
-    int val;
-    size_t cpt = 0, n_fields = 0;
-
-    field = strtok_r(creq->message, ",", &tmp);
-    while (field != NULL) {
-        n_fields ++;
-        for (i = 0; i < mugi->nb_nodes; i ++) {
-            if (strncmp(field, mugi->nodes[i].field, strlen(field)) != 0)
-                continue;
-            if (!mugi->nodes[i].active)
-                continue;
-
-            // OK
-            val = snprintf(buf, N - 1, "read %s:%s;", usr->login, field);
-            if (val >= N) {
-                fprintf(stderr, "snprintf truncate\n");
-                return 1;
-            } else if (val < 0) {
-                perror("snprintf");
-                return -1;
-            }
-
-            buf[val] = '\0';
-            if (send_toclient(sock, buf, &mugi->nodes[i].saddr) == -1)
-                return -1;
-            cpt ++;
-            break;
-        }
-
-        field = strtok_r(NULL, ",", &tmp);
-    }
-
-    if (n_fields != cpt) {
-        // NO CORRESPONDING NODE AVAILABLE
-        printf("NO NODE FOUND POUR LA REQUEST\n");
-        return 1;
-    }
-
-    return 0;
-}
-
 int node_delete_request (const int sock, clientreq *creq, mugiwara *mugi, user *usr)
 {
     (void) creq;
@@ -675,3 +818,5 @@ int follow_deleteres (const int sock, clientreq *creq, mugiwara *mugi)
 
     return 0;
 }
+
+*/

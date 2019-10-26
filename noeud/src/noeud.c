@@ -329,7 +329,7 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
     if (((c = fgetc(datafile)) == EOF) && (errno != 0)) {
         perror("fgetc");
         return -1;
-    } 
+    }
 
     if (c != EOF) {
         if (fseek(datafile, -1, SEEK_END) == -1) {

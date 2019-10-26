@@ -25,13 +25,16 @@ int sck_bind (const int sock, const uint16_t port) // format hote
     return 0;
 }
 
-ssize_t sck_send (const int sck, const struct sockaddr_in *saddr, const char *buf, const size_t buf_len)
+ssize_t sck_send (const int sck, const struct sockaddr_in *saddr, const void *buf, const size_t buf_len)
 {
     ssize_t bytes;
     size_t total = 0;
     socklen_t salen = sizeof(struct sockaddr_in);
-    while ((bytes = sendto(sck, buf + total, buf_len - total, 0, (struct sockaddr *) saddr, salen)) > 0)
+    while ((bytes = sendto(sck, buf + total, buf_len - total, 0, (struct sockaddr *) saddr, salen)) > 0) {
         total += bytes;
+        if (total == buf_len)
+            break;
+    }
 
     if (bytes == -1) {
         perror("send");
@@ -41,7 +44,7 @@ ssize_t sck_send (const int sck, const struct sockaddr_in *saddr, const char *bu
     return total;
 }
 
-ssize_t sck_recv (const int sck, char *buf, const size_t buf_max, const struct sockaddr_in *saddr)
+ssize_t sck_recv (const int sck, void *buf, const size_t buf_max, const struct sockaddr_in *saddr)
 {
     socklen_t salen = sizeof(struct sockaddr_in);
     ssize_t bytes;
@@ -88,11 +91,9 @@ int sck_wait_for_request (const int sck, const time_t delay, void *cb_data, int 
             case -1:
                 perror("select error");
                 return -1;
-
             case 0:
                 fprintf(stderr, "Timeout reached\n");
                 return -1;
-
             default:
                 if (FD_ISSET(0, &fdset)) {
                     if (callback(0, cb_data) == -1)

@@ -18,7 +18,7 @@
 
 #define DG_DATA_MAX 65536 // octets
 #define DG_HEADER_SIZE 10
-#define DG_FIRST_OCTET 0x0000 // 2 octets à 0
+#define DG_FIRST_2OCTET 0x0000 // 2 octets à 0
 #define DG_DELETE_TIMEOUT 400 // si dgram reçu non complet apres 400ms, le supprimer
 #define DG_RESEND_TIMEOUT 500 // si dgram envoyé non acquis apres 600ms, le réenvoyer
 
@@ -28,6 +28,7 @@
 // NREQ = Noeud -> Relais
 // RRES = Relais -> Client
 // NRES = Noeud -> Relais
+// RNRES = Relais -> Noeud
 // -------------------------
 #define ACK 0
 // CREQ
@@ -40,37 +41,43 @@
 #define RREQ_READ 6
 #define RREQ_WRITE 7
 #define RREQ_DELETE 8
-#define RREQ_DATA 9
+#define RREQ_GETDATA 9
 #define RREQ_SYNC 10
 #define RREQ_DESTROY 11
 // NREQ
 #define NREQ_LOGOUT 12
+#define NREQ_MEET 13
 // NRES
 #define NRES_READ 20
 #define NRES_WRITE 21
 #define NRES_DELETE 22
-#define NRES_DATA 23
+#define NRES_GETDATA 23
 #define NRES_SYNC 24
 // RRES
 #define RRES_AUTH 25
 #define RRES_READ 26
 #define RRES_WRITE 27
 #define RRES_DELETE 28
+// RNRES
+#define RNRES_MEET 30
 
 // status
 #define SUC_DELETE 40
 #define SUC_WRITE 41
 #define SUC_READ 42
 #define SUC_AUTH 43
-#define NORMAL 44
-#define ERR_NOREPLY 45
-#define ERR_AUTHFAILED 46
-#define ERR_NOPERM 47
-#define ERR_NONODE 48
-#define ERR_SYNTAX 49
-#define ERR_UNKNOWFIELD 50
-#define ERR_WRITE 51
-#define ERR_DELETE 52
+#define SUC_MEET 44
+#define NORMAL 50
+#define ERR_NOREPLY 51
+#define ERR_AUTHFAILED 52
+#define ERR_NOPERM 53
+#define ERR_NONODE 54
+#define ERR_SYNTAX 55
+#define ERR_UNKNOWFIELD 56
+#define ERR_WRITE 57
+#define ERR_DELETE 58
+#define ERR_NOTAUTH 59
+#define ERR_ALREADYAUTH 60
 
 typedef struct dgram_s {
     // en-tête (2 premiers octets = indiquer debut en-tête)
@@ -80,7 +87,7 @@ typedef struct dgram_s {
     uint16_t data_size; // 2 octets
     uint16_t checksum; // 2 octets
     // data
-    char *data; // data_len octets (max = DG_DATA_MAX)
+    char *data; // data_len octets (max = DG_DATA_MAX), a \0 is auto appended
     uint16_t data_len;
     // divers
     uint32_t addr; // format network
@@ -96,10 +103,8 @@ typedef struct {
     dgram **dgreceived;
 } thread_targ;
 
-int dgram_add_from_raw (dgram **dglist,void *raw, const size_t raw_size, dgram *curdg, const struct sockaddr_in *saddr);
-dgram * dgram_del_from_ack (dgram *dglist, const uint16_t ack);
-dgram * dgram_del_from_id (dgram *dglist, const uint16_t ack);
-bool dgram_is_ready (dgram *dg);
+int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, dgram *curdg, const struct sockaddr_in *saddr);
+bool dgram_del_from_id (dgram **dglist, const uint16_t id);
 int dgram_print_status (const uint8_t request);
 int dgram_check_timeout_delete (dgram **dgreceived);
 int dgram_check_timeout_resend (const int sock, dgram **dgsent);
@@ -109,6 +114,8 @@ int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uin
 dgram * dgram_add (dgram *dglist, dgram *dg);
 int dgram_send (const int sck, dgram *dg, dgram **dg_sent);
 void * thread_timeout_loop (void *arg);
-bool dgram_is_ready (dgram *dg);
+bool dgram_is_ready (const dgram *dg);
+bool dgram_verify_checksum (const dgram *dg);
+void dgram_debug (const dgram *dg);
 
 #endif
