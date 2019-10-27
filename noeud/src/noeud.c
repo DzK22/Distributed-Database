@@ -1,210 +1,122 @@
 #include "../headers/noeud.h"
 
-int create_socket ()
+int fd_can_read (int fd, void *data)
 {
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == -1) {
-        perror("socket error");
-        return -1;
-    }
-
-    return sock;
-}
-
-int fill_node_data (int sock, const char *field, const char *datafile, const char *relais_ip, const char *relais_port, node_data *ndata)
-{
-    struct sockaddr_in saddr_relais;
-    saddr_relais.sin_family = AF_INET;
-    saddr_relais.sin_port = htons(atoi(relais_port));
-    if (inet_pton(AF_INET, relais_ip, &saddr_relais.sin_addr) == -1) {
-        perror("inet_pton");
-        return -1;
-    }
-
-    ndata->sock = sock;
-    ndata->field = field;
-    ndata->datafile = datafile;
-    ndata->saddr_relais = saddr_relais;
-    return 0;
-}
-
-int can_bind (const int sock)
-{
-    struct sockaddr_in saddr;
-    saddr.sin_family = AF_INET;
-    saddr.sin_port = htons(0);
-    saddr.sin_addr.s_addr = INADDR_ANY;
-    const socklen_t saddr_len = sizeof(struct sockaddr_in);
-
-    if (bind(sock, (struct sockaddr *) &saddr, saddr_len) == -1) {
-        perror("bind error");
-        return -1;
-    }
-
-    return 0;
-}
-
-int remember_relais_addr (const node_data *ndata)
-{
-    const socklen_t saddr_len = sizeof(struct sockaddr_in);
-    if (connect(ndata->sock, (struct sockaddr *) &ndata->saddr_relais, saddr_len) == -1) {
-        perror("connect");
-        return 1;
-    }
-
-    return 0;
-}
-
-int send_to_relais (const int sock, const char *buf, const size_t buf_len)
-{
-    ssize_t bytes;
-    size_t total = 0;
-    printf("aller on send\n");
-    while ((bytes = send(sock, buf + total, buf_len - total, 0)) > 0)
-    {
-      total += bytes;
-      printf("send = %s\n", buf);
-    }
-    if (bytes == -1) {
-        perror("send error");
-        return -1;
-    }
-
-    return 0;
-}
-
-ssize_t recv_from_relais (const int sock, char *buf, const size_t buf_max, struct sockaddr_in *sender_saddr)
-{
-    socklen_t sender_saddr_len = sizeof(struct sockaddr_in);
-    ssize_t bytes;
-    if ((bytes = recvfrom(sock, buf, buf_max , 0, (struct sockaddr *) sender_saddr, &sender_saddr_len)) == -1)
-    {
-      perror("recvfrom");
-      return -1;
-    }
-    return bytes;
-}
-
-int meet_relais (const node_data *ndata)
-{
-    char str[MESS_MAX];
-    int tmp = snprintf(str, MESS_MAX, "meet %s;", ndata->field);
-    if ((tmp >= MESS_MAX) || (tmp < 0)) {
-        fprintf(stderr, "sprintf error\n");
-        return -1;
-    }
-
-    if (send_to_relais(ndata->sock, str, strlen(str)) == -1)
-        return -1;
-
-    ssize_t bytes;
-    if ((bytes = recv(ndata->sock, str, MESS_MAX - 1, 0)) == -1)
-        return -1;
-    str[bytes] = '\0';
-    if (strncmp(str, "success;", 9) != 0) {
-        printf("MEET_RELAIS FAILED: WRONG RESPONSE MESSAGE FROM RELAIS: %s\n", str);
-        return -1;
-    }
-
-    printf("MEET SUCCESS\n");
-    return 0;
-}
-
-void wait_for_request (const node_data *ndata)
-{
-    char buf[MESS_MAX];
-    ssize_t bytes;
-    struct sockaddr_in sender_saddr;
-    relaisreq rreq;
-
-    while ((bytes = recv_from_relais(ndata->sock, buf, MESS_MAX - 1, &sender_saddr)) > 0) {
-        printf("ndata->sock = %s\n", buf);
-        buf[bytes] = '\0';
-        switch (parse_datagram(buf, &rreq)) {
-            case -1:
-                return;
-            case 1:
-                // skip
-                break;
-        }
-
-        if (exec_relais_request(ndata, &rreq) == -1)
-            return;
-    }
-    // if here, there is a problem
-}
-
-int parse_datagram (const char *buf, relaisreq *rreq) // buf must be null terminated
-{
-    printf("Nouvelle requete recue: %s\n", buf);
-    char tmp[MESS_MAX];
-    errno = 0;
-    if (sscanf(buf, "%s %s;", tmp, rreq->args) != 2) {
-        if (errno != 0) {
-            perror("sscanf");
+    nodedata *ndata = ((nodedata *) data);
+    if (fd == ndata->sck) {
+        if (read_sck(ndata) == -1)
             return -1;
-        }
-        // else
-        fprintf(stderr, "parse_datagram: cannot assign all items: %s\n", buf);
-        return 1;
-    }
-    // degeullasse a virer quand trouver le bug du ; a fin de args
-    rreq->args[strlen(rreq->args) - 1] = '\0';
-
-    if (strncmp(tmp, "read", 5) == 0)
-        rreq->type = Read;
-    else if (strncmp(tmp, "write", 7) == 0)
-        rreq->type = Write;
-    else if (strncmp(tmp, "delete", 7) == 0)
-        rreq->type = Delete;
-    else if (strncmp(tmp, "getall", 7) == 0)
-        rreq->type = Getall;
-    else if (strncmp(tmp, "changeall", 10) == 0)
-        rreq->type = Changeall;
-    else {
-        fprintf(stderr, "parse_datagram: wrong message type\n");
-        return -1;
     }
 
     return 0;
 }
 
-int exec_relais_request (const node_data *ndata, relaisreq *rreq)
+int read_sck (nodedata *ndata)
 {
-    switch (rreq->type) {
-        case Read:
-            if (node_read(ndata, rreq->args) == -1)
+    void *buf = malloc(SCK_DATAGRAM_MAX);
+    if (buf == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    struct sockaddr_in saddr;
+    ssize_t bytes = sck_recv(ndata->sck, buf, SCK_DATAGRAM_MAX, &saddr);
+    if (bytes == -1)
+        return -1;
+
+    if (!is_relais(&saddr, ndata)) {
+        fprintf(stderr, "Un paquet ne provenant pas du relais a été rejeté\n");
+        return 1;
+    }
+
+    dgram dg;
+    if (dgram_add_from_raw(&ndata->dgreceived, buf, bytes, &dg, &saddr) == -1)
+        return -1;
+    free(buf);
+    dgram_debug(&dg);
+
+    if (dgram_is_ready(&dg)) {
+        printf("is rdy\n");
+        // SEND ACK
+        if (dg.request != ACK) {
+            dgram *ack = malloc(sizeof(dgram));
+            if (ack == NULL) {
+                perror("malloc");
+                return -1;
+            }
+            if (dgram_create(ack, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
+                return -1;
+            if (dgram_send(ndata->sck, ack, &ndata->dgsent) == -1)
+                return -1;
+        }
+
+        if (exec_dg(&dg, ndata) == -1)
+            return -1;
+        // supprimer ce dg
+        if (!dgram_del_from_id(&ndata->dgreceived, dg.id))
+            return 1;
+    }
+
+    return 0;
+}
+
+int exec_dg (const dgram *dg, nodedata *ndata)
+{
+    switch (dg->request) {
+        case RNRES_MEET:
+            if (exec_rnres_meet(dg, ndata) == -1)
                 return -1;
             break;
-        case Write:
-            if (node_write(ndata, rreq->args) == -1)
+        case RREQ_READ:
+            if (exec_rreq_read(dg, ndata) == -1)
                 return -1;
             break;
-        case Delete:
-            if (node_delete(ndata, rreq->args) == -1)
+        case RREQ_WRITE:
+            if (exec_rreq_write(dg, ndata) == -1)
                 return -1;
             break;
-        case Changeall:
-            if (change_all_data(ndata, rreq->args) == -1)
+        case RREQ_DELETE:
+            if (exec_rreq_delete(dg, ndata) == -1)
                 return -1;
             break;
-        case Getall:
-            // if get_all_data ...
+        case RREQ_GETDATA:
+            if (exec_rreq_getdata(dg, ndata) == -1)
+                return -1;
+            break;
+        case RREQ_SYNC:
+            if (exec_rreq_sync(dg, ndata) == -1)
+                return -1;
+            break;
+        case RREQ_DESTROY:
+            if (exec_rreq_destroy(dg, ndata) == -1)
+                return -1;
+            break;
+        case ACK:
+            dgram_del_from_id(&ndata->dgsent, dg->id);
             break;
         default:
-            return -1;
+            fprintf(stderr, "Paquet reçu avec requete non gérée par le noeud: %d\n", dg->request);
     }
 
     return 0;
 }
 
-int node_read (const node_data *ndata, const char *args) // args must be null terminated
+int exec_rnres_meet (const dgram *dg, nodedata *ndata)
+{
+    if (dg->status == SUC_MEET)
+        ndata->meet_success = true;
+    else
+        return -1;
+
+    return 0;
+}
+
+int exec_rreq_read (const dgram *dg, nodedata *ndata)
 {
     // args ne peut être que un seul champ ! (c'est au relais de split les champs vers les divers noeuds)
     // /!/ args = <username>:<field>;
 
     char *username, *field, *tmp;
-    username = strtok_r((char *) args, ":", &tmp);
+    username = strtok_r(dg->data, ":", &tmp);
     if (username == NULL) {
         perror("strtok_r");
         return -1;
@@ -217,8 +129,17 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
 
     // verifions que ce noeud possède bien le champs
     if (strncmp(field, ndata->field, strlen(field) + 1) != 0) {
-        send_to_relais(ndata->sock, "3", 1);
-        printf("ERROR 3\n");
+        // envoyer err
+        dgram *newdg = malloc(sizeof(dgram));
+        if (newdg == NULL) {
+            perror("malloc");
+            return -1;
+        }
+        if (dgram_create(newdg, ndata->id_counter ++, NRES_READ, ERR_UNKNOWFIELD , dg->addr, dg->port, 0, NULL) == -1)
+            return -1;
+        if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
+            return -1;
+
         return 1;
     }
 
@@ -244,36 +165,35 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
         perror("malloc");
         return -1;
     }
-    char data[MESS_MAX] = "";
+    char data[DG_DATA_MAX] = "";
     size_t len;
     size_t n = DATAFILE_LINE_MAX;
 
     errno = 0;
     while ((bytes = getline(&line, &n, datafile)) != -1) {
-        len = strlen(data);
+        len = strnlen(data, DG_DATA_MAX);
         if (line[bytes - 1] == '\n')
             line[bytes - 1] = '\0';
-        strncat(data, line, MESS_MAX - len -1);
-        if (len >= MESS_MAX)
+        strncat(data, line, DG_DATA_MAX - len -1);
+        if (len >= DG_DATA_MAX)
             break;
-        strcat(data, ",");
+        strncat(data, ",", DG_DATA_MAX - len);
     }
     if (errno != 0) {
         perror("getline");
         return -1;
     }
 
-    data[strlen(data) - 1] = '\0';
+    data[strnlen(data, DG_DATA_MAX) - 1] = '\0';
     free(line);
     if (fclose(datafile) == EOF) {
         perror("fclose");
         return -1;
     }
 
-    char msg[MESS_MAX];
-    int val;
-    val = snprintf(msg, MESS_MAX, "readres %s:%s;", username, data);
-    if (val >= MESS_MAX) {
+    char buf[DG_DATA_MAX];
+    int val = snprintf(buf, DG_DATA_MAX, "%s:%s", username, data);
+    if (val >= DG_DATA_MAX) {
         fprintf(stderr, "snprintf truncate\n");
         return 1;
     } else if (val < 0) {
@@ -281,27 +201,34 @@ int node_read (const node_data *ndata, const char *args) // args must be null te
         return -1;
     }
 
-    if (send_to_relais(ndata->sock, msg, val) == -1)
+    dgram *newdg = malloc(sizeof(dgram));
+    if (newdg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    if (dgram_create(newdg, ndata->id_counter ++, NRES_READ, SUC_READ, dg->addr, dg->port, val, buf) == -1)
+        return -1;
+    if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
         return -1;
 
     return 0;
 }
 
-int node_write (const node_data *ndata, const char *args) // args must be null terminated
+int exec_rreq_write (const dgram *dg, nodedata *ndata)
 {
-    // args ne peut être que un seul champ ! (c'est au relais de split les champs vers les divers noeuds)
-    // /!/ args = <username>:<field_value>;
+    // ne peut être que un seul champ ! (c'est au relais de split les champs vers les divers noeuds)
+    // dg->data = <username>:<field_value>
 
-    char *username, *tmp, args_cpy[MESS_MAX];
-    strncpy(args_cpy, args, MESS_MAX);
-    username = strtok_r(args_cpy, ":", &tmp);
+    char *username, *tmp, data_cpy[DG_DATA_MAX];
+    strncpy(data_cpy, dg->data, DG_DATA_MAX);
+    username = strtok_r(data_cpy, ":", &tmp);
     if (username == NULL) {
-        perror("strtok_r");
-        return -1;
+        fprintf(stderr, "strtok_r error ?\n");
+        return 1;
     }
 
-    int tmpfd;
-    if ((tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644)) == -1) {
+    int tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644);
+    if (tmpfd == -1) {
         perror("open");
         return -1;
     }
@@ -311,9 +238,8 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
     }
 
     // si elle existe, supprimer la ligne contenant le user et l'ancienne valeur qui lui est associée
-    if (delete_user_file_line(ndata->datafile, username) == -1)
+    if (delete_user_file_line(username, ndata) == -1)
         return -1;
-
 
     // si le dernier caractere est un \n, le supprimer ! sinon doublon de \n et ligne vide inutile
 
@@ -356,9 +282,8 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
         }
     }
 
-
     // ajout de la nouvelle ligne
-    if (fputs(args, datafile) == EOF) {
+    if (fputs(dg->data, datafile) == EOF) {
         perror("fputs");
         return -1;
     }
@@ -368,10 +293,39 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
         return -1;
     }
 
-    char msg[MESS_MAX];
-    int val;
-    val = snprintf(msg, MESS_MAX, "writeres success:%s;", username);
-    if (val >= MESS_MAX) {
+    dgram *newdg = malloc(sizeof(dgram));
+    if (newdg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    if (dgram_create(newdg, ndata->id_counter ++, NRES_WRITE, SUC_WRITE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
+        return -1;
+    if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
+        return -1;
+
+    return 0;
+}
+
+int exec_rreq_delete (const dgram *dg, nodedata *ndata)
+{
+    const char *username = dg->data;
+    int tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644);
+    if (tmpfd == -1) {
+        perror("open");
+        return -1;
+    }
+    if (close(tmpfd) == -1) {
+        perror("close");
+        return -1;
+    }
+
+    // si elle existe, supprimer la ligne contenant le user et l'ancienne valeur qui lui est associée
+    if (delete_user_file_line(username, ndata) == -1)
+        return -1;
+
+    char buf[DG_DATA_MAX];
+    int val = snprintf(buf, DG_DATA_MAX, "%s", username);
+    if (val >= DG_DATA_MAX) {
         fprintf(stderr, "snprintf truncate\n");
         return 1;
     } else if (val < 0) {
@@ -379,18 +333,80 @@ int node_write (const node_data *ndata, const char *args) // args must be null t
         return -1;
     }
 
-    if (send_to_relais(ndata->sock, msg, val) == -1)
+    // envoyer succes au relais
+    dgram *newdg = malloc(sizeof(dgram));
+    if (newdg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    if (dgram_create(newdg, ndata->id_counter ++, NRES_DELETE, SUC_DELETE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
+        return -1;
+    if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
         return -1;
 
     return 0;
 }
 
-int delete_user_file_line (const char *filename, const char *username)
+int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
 {
-    char tmp_w_filename[MESS_MAX];
-    sprintf(tmp_w_filename, "%s_tmp", filename);
+    (void) dg, (void) ndata;
 
-    FILE *file_r = fopen(filename, "r");
+    return 0;
+}
+
+int exec_rreq_sync (const dgram *dg, nodedata *ndata)
+{
+    (void) dg, (void) ndata;
+
+    return 0;
+}
+
+int exec_rreq_destroy (const dgram *dg, nodedata *ndata)
+{
+    (void) dg, (void) ndata;
+
+    return 0;
+}
+
+int send_meet (nodedata *ndata)
+{
+    char buf[DG_DATA_MAX];
+    int bytes = snprintf(buf, DG_DATA_MAX, "%s", ndata->field);
+    if (bytes >= DG_DATA_MAX) {
+        fprintf(stderr, "snprintf truncate\n");
+        return 1;
+    } else if (bytes < 0) {
+        fprintf(stderr, "snprintf error\n");
+        return -1;
+    }
+
+    dgram *dg = malloc(sizeof(dgram));
+    if (dg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    if (dgram_create(dg, ndata->id_counter ++, NREQ_MEET, NORMAL, ndata->relais_saddr.sin_addr.s_addr, ndata->relais_saddr.sin_port, bytes, buf) == -1)
+        return -1;
+    if (dgram_send(ndata->sck, dg, &ndata->dgsent) == -1)
+        return -1;
+
+    return 0;
+}
+
+bool is_relais (const struct sockaddr_in *saddr, const nodedata *ndata)
+{
+    if ((saddr->sin_addr.s_addr == ndata->relais_saddr.sin_addr.s_addr) && (saddr->sin_port == ndata->relais_saddr.sin_port))
+        return true;
+
+    return false;
+}
+
+int delete_user_file_line (const char *username, const nodedata *ndata)
+{
+    char tmp_w_filename[N];
+    sprintf(tmp_w_filename, "%s_tmp", ndata->datafile);
+
+    FILE *file_r = fopen(ndata->datafile, "r");
     if (file_r == NULL) {
         perror("fopen");
         return -1;
@@ -408,8 +424,8 @@ int delete_user_file_line (const char *filename, const char *username)
         return -1;
     }
 
-    char *usr, *tmp, line_cpy[MESS_MAX];
-    size_t username_len = strlen(username), n = DATAFILE_LINE_MAX;
+    char *usr, *tmp, line_cpy[DATAFILE_LINE_MAX];
+    size_t username_len = strnlen(username, FIELD_MAX), n = DATAFILE_LINE_MAX;
     ssize_t bytes;
     errno = 0;
     while ((bytes = getline(&line, &n, file_r)) != -1) {
@@ -421,8 +437,6 @@ int delete_user_file_line (const char *filename, const char *username)
             return -1;
         }
         if (strncmp(usr, username, username_len + 1) == 0) {
-            // do not add this line to the buffer
-            printf("SKIP THIS LINE\n");
             continue;
         }
 
@@ -449,7 +463,7 @@ int delete_user_file_line (const char *filename, const char *username)
         return -1;
     }
 
-    if (rename(tmp_w_filename, filename) == -1) {
+    if (rename(tmp_w_filename, ndata->datafile) == -1) {
         perror("rename");
         return -1;
     }
@@ -457,41 +471,7 @@ int delete_user_file_line (const char *filename, const char *username)
     return 0;
 }
 
-int node_delete (const node_data *ndata, const char *args) // args must be null terminated
-{
-    const char *username = args;
-
-    int tmpfd;
-    if ((tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644)) == -1) {
-        perror("open");
-        return -1;
-    }
-    if (close(tmpfd) == -1) {
-        perror("close");
-        return -1;
-    }
-
-    // si elle existe, supprimer la ligne contenant le user et l'ancienne valeur qui lui est associée
-    if (delete_user_file_line(ndata->datafile, username) == -1)
-        return -1;
-
-    char msg[MESS_MAX];
-    int val;
-    val = snprintf(msg, MESS_MAX, "deleteres success:%s;", username);
-    if (val >= MESS_MAX) {
-        fprintf(stderr, "snprintf truncate\n");
-        return 1;
-    } else if (val < 0) {
-        perror("snprintf");
-        return -1;
-    }
-
-    if (send_to_relais(ndata->sock, msg, val) == -1)
-        return -1;
-
-    return 0;
-}
-
+/*
 int change_all_data (const node_data *ndata, const char *new_data) // args must be null terminated
 {
     FILE *datafile = fopen(ndata->datafile, "w");
@@ -512,3 +492,7 @@ int change_all_data (const node_data *ndata, const char *new_data) // args must 
 
     return 0;
 }
+
+    return 0;
+}
+*/

@@ -1,75 +1,39 @@
 #ifndef __NOEUD_H__
 #define __NOEUD_H__
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <string.h>
-#include <stdbool.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <errno.h>
+#include "../../common/headers/datagram.h"
+#include "../../common/headers/sck.h"
 
 #define N 1024
 #define ARGS_MAX 16
-#define MESS_MAX 1024
 #define FIELD_MAX 32
 #define DATAFILE_LINE_MAX 64
 
-/* codes erreurs retournés au serveur relais:
- * (1) l'émetteur n'est pas le serveur relais
- * (2) la requête est incorrecte (pb lors du parse_datagram)
- * (3) le noeud ne possède pas le champ demandé
- */
-
-enum relaisreq_types {Read, Write, Delete, Changeall, Getall};
-
-typedef struct relaisreq {
-    int type;
-    char args[ARGS_MAX];
-} relaisreq;
-
-typedef struct node_data {
-    int sock;
-    struct sockaddr_in saddr_relais;
+typedef struct {
+    int sck;
     const char *field;
     const char *datafile;
-} node_data;
+    struct sockaddr_in relais_saddr;
+    dgram *dgsent;
+    dgram *dgreceived;
+    unsigned id_counter;
+    bool meet_success;
+} nodedata;
 
-int create_socket ();
+int fd_can_read (int fd, void *data);
+int read_sck (nodedata *ndata);
+int exec_dg (const dgram *dg, nodedata *ndata);
 
-int fill_node_data (int sock, const char *field, const char *datafile, const char *relais_ip, const char *relais_port, node_data *ndata);
+int exec_rnres_meet (const dgram *dg, nodedata *ndata);
+int exec_rreq_read (const dgram *dg, nodedata *ndata);
+int exec_rreq_write (const dgram *dg, nodedata *ndata);
+int exec_rreq_delete (const dgram *dg, nodedata *ndata);
+int exec_rreq_getdata (const dgram *dg, nodedata *ndata);
+int exec_rreq_sync (const dgram *dg, nodedata *ndata);
+int exec_rreq_destroy (const dgram *dg, nodedata *ndata);
 
-int can_bind (const int sock);
-
-int remember_relais_addr (const node_data *ndata);
-
-int meet_relais (const node_data *ndata);
-
-int send_to_relais (const int sock, const char *buf, const size_t buf_len);
-
-ssize_t recv_from_relais (const int sock, char *buf, const size_t buf_max, struct sockaddr_in *sender_saddr);
-
-void wait_for_request (const node_data *ndata);
-
-int parse_datagram (const char *buf, relaisreq *rreq);
-
-int exec_relais_request (const node_data *ndata, relaisreq *rreq);
-
-int node_read (const node_data *ndata, const char *args);
-
-int node_write (const node_data *ndata, const char *args);
-
-int node_delete (const node_data *ndata, const char *args);
-
-int change_all_data (const node_data *ndata, const char *new_data);
-
-int delete_user_file_line (const char *filename, const char *username);
+int send_meet (nodedata *ndata);
+bool is_relais (const struct sockaddr_in *saddr, const nodedata *ndata);
+int delete_user_file_line (const char *username, const nodedata *ndata);
 
 #endif

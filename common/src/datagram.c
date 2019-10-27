@@ -48,6 +48,9 @@ int dgram_print_status (const uint8_t status)
         case ERR_NOTAUTH:
             printf("Vous n'êtes pas authentifié");
             break;
+        case ERR_ALREADYAUTH:
+            printf("Votre login/mdp est déjà connecté");
+            break;
         default:
             fprintf(stderr, "Code de status incorrect\n");
             return -1;
@@ -251,7 +254,7 @@ int dgram_create_raw (const dgram *dg, void *buf, size_t buf_size)
     return 0;
 }
 
-int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, char *data)
+int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data)
 {
     dg->id = id;
     dg->request = request;

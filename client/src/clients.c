@@ -34,7 +34,8 @@ int read_stdin (clientdata *cdata)
         return 1;
     }
 
-    size_t data_len = strnlen(data, SCK_DATAGRAM_MAX);
+    data[strnlen(data, DG_DATA_MAX) - 1] = '\0';
+    size_t data_len = strnlen(data, DG_DATA_MAX);
     char *request_str, *tmp;
     request_str = strtok_r(data, " ", &tmp);
     if (request_str == NULL) {
@@ -43,13 +44,26 @@ int read_stdin (clientdata *cdata)
     }
 
     uint8_t request;
-    if (strncmp(request_str, "lire", 5) == 0)
+    size_t instr_len;
+    bool arg = false;
+    if (strncmp(request_str, "lire", 5) == 0) {
         request = CREQ_READ;
-    else if (strncmp(request_str, "ecrire", 7) == 0)
+        instr_len = 5;
+        arg = true;
+    } else if (strncmp(request_str, "ecrire", 7) == 0) {
         request = CREQ_WRITE;
-    else if (strncmp(request_str, "supprimer", 10) == 0)
+        instr_len = 7;
+        arg = true;
+    } else if (strncmp(request_str, "supprimer", 10) == 0) {
         request = CREQ_DELETE;
-    else {
+        instr_len = 10;
+        arg = false;
+    } else {
+        dgram_print_status(ERR_SYNTAX);
+        return 1;
+    }
+
+    if ((!arg && (data_len > instr_len)) || (arg && (data_len <= instr_len))) {
         dgram_print_status(ERR_SYNTAX);
         return 1;
     }
@@ -59,7 +73,7 @@ int read_stdin (clientdata *cdata)
         perror("malloc");
         return -1;
     }
-    if (dgram_create(dg, cdata->id_counter ++, request, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, data_len, data) == -1)
+    if (dgram_create(dg, cdata->id_counter ++, request, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, arg ? data_len : 0, arg ? data + instr_len : NULL) == -1)
         return -1;
 
     if (dgram_send(cdata->sck, dg, &cdata->dgsent) == -1)
@@ -84,7 +98,7 @@ int read_sck (clientdata *cdata)
     if (dgram_add_from_raw(&cdata->dgreceived, buf, bytes, &dg, &saddr) == -1)
         return -1;
 
-    dgram_debug(&dg);
+    /* dgram_debug(&dg); */
     if (dgram_is_ready(&dg)) {
         // SEND ACK
         if (dg.request != ACK) {
@@ -104,34 +118,7 @@ int read_sck (clientdata *cdata)
         // supprimer ce dg
         if (!dgram_del_from_id(&cdata->dgreceived, dg.id))
             return 1;
-
     }
-
-    return 0;
-}
-
-int send_auth (const char *login, const char *password, clientdata *cdata)
-{
-    char buf[DG_DATA_MAX];
-    int res = snprintf(buf, DG_DATA_MAX, "%s:%s", login, password);
-    if (res >= DG_DATA_MAX) {
-        fprintf(stderr, "authentificate: snprintf truncate\n");
-        return -1;
-    } else if (res < 0) {
-        perror("snprintf");
-        return -1;
-    }
-
-    dgram *dg = malloc(sizeof(dgram));
-    if (dg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(dg, cdata->id_counter ++, CREQ_AUTH, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, res, buf) == -1)
-        return -1;
-
-    if (dgram_send(cdata->sck, dg, &cdata->dgsent) == -1)
-        return -1;
 
     return 0;
 }
@@ -168,7 +155,33 @@ int exec_dg (const dgram *dg, clientdata *cdata)
     return 0;
 }
 
+int send_auth (const char *login, const char *password, clientdata *cdata)
+{
+    char buf[DG_DATA_MAX];
+    int res = snprintf(buf, DG_DATA_MAX, "%s:%s", login, password);
+    if (res >= DG_DATA_MAX) {
+        fprintf(stderr, "authentificate: snprintf truncate\n");
+        return -1;
+    } else if (res < 0) {
+        perror("snprintf");
+        return -1;
+    }
+
+    dgram *dg = malloc(sizeof(dgram));
+    if (dg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    if (dgram_create(dg, cdata->id_counter ++, CREQ_AUTH, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, res, buf) == -1)
+        return -1;
+
+    if (dgram_send(cdata->sck, dg, &cdata->dgsent) == -1)
+        return -1;
+
+    return 0;
+}
+
 void print_read_res (const dgram *dg)
 {
-   printf("\033[183m%s\033[0m", dg->data);
+   printf("\033[36m%s\033[0m\n", dg->data);
 }

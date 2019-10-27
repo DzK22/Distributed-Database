@@ -1,34 +1,49 @@
-include "../headers/noeud.h"
+#include "../headers/noeud.h"
 
-int main(int argc, char **argv)
+int main (int argc, char **argv)
 {
     if (argc != 5) {
-        fprintf(stderr, "Utilisation: %s <relais_ip> <relais_port> <champ stocké> <fichier données>\n", argv[0]);
+        fprintf(stderr, "Utilisation: %s <relais_addr> <relais_port> <champ stocké> <fichier données>\n", argv[0]);
         return EXIT_FAILURE;
     }
-    const char *relais_ip = argv[1];
+    const char *relais_addr = argv[1];
     const char *relais_port = argv[2];
     const char *field = argv[3];
     const char *datafile = argv[4];
 
-    int sock = create_socket();
-    if (sock == -1)
+    int sck = sck_create();
+    if (sck == -1)
         return EXIT_FAILURE;
 
-    node_data ndata;
-    if (fill_node_data(sock, field, datafile, relais_ip, relais_port, &ndata) == -1)
+    if (sck_bind(sck, 0) == -1)
         return EXIT_FAILURE;
 
-    if (can_bind(sock) == -1)
+    nodedata ndata;
+    ndata.sck = sck;
+    ndata.field = field;
+    ndata.datafile = datafile;
+    ndata.dgsent = NULL;
+    ndata.dgreceived = NULL;
+    ndata.id_counter = 0;
+    ndata.meet_success = false;
+
+    if (sck_create_saddr(&ndata.relais_saddr, relais_addr, relais_port) == -1)
         return EXIT_FAILURE;
 
-    if (remember_relais_addr(&ndata) == -1)
+    // start thread
+    pthread_t th;
+    thread_targ targ;
+    targ.sck = ndata.sck;
+    targ.dgsent = &ndata.dgsent;
+    targ.dgreceived = &ndata.dgreceived;
+    if ((errno = pthread_create(&th, NULL, thread_timeout_loop, &targ)) != 0) {
+        perror("pthread_create");
+        return EXIT_FAILURE;
+    }
+
+    if (send_meet(&ndata) == -1)
         return EXIT_FAILURE;
 
-    if (meet_relais(&ndata) == -1)
-        return EXIT_FAILURE;
-
-    wait_for_request(&ndata);
-
+    sck_wait_for_request(sck, 1200, false, &ndata, fd_can_read);
     return EXIT_FAILURE;
 }

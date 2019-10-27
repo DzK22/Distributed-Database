@@ -1,19 +1,6 @@
 #ifndef __DATAGRAM_H__
 #define __DATAGRAM_H__
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <string.h>
-#include <sys/time.h>
-#include <stdint.h>
-#include <math.h>
 #include "sck.h"
 
 #define DG_DATA_MAX 65536 // octets
@@ -110,7 +97,7 @@ int dgram_check_timeout_delete (dgram **dgreceived);
 int dgram_check_timeout_resend (const int sock, dgram **dgsent);
 unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2);
 uint16_t dgram_checksum (const dgram *dg);
-int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, char *data);
+int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data);
 dgram * dgram_add (dgram *dglist, dgram *dg);
 int dgram_send (const int sck, dgram *dg, dgram **dg_sent);
 void * thread_timeout_loop (void *arg);

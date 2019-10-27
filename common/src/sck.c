@@ -73,7 +73,7 @@ int sck_create_saddr (struct sockaddr_in *saddr, const char *addr, const char *p
     return 0;
 }
 
-int sck_wait_for_request (const int sck, const time_t delay, void *cb_data, int (*callback) (int, void *)) // wait for sck and stdin
+int sck_wait_for_request (const int sck, const time_t delay, const bool use_stdin, void *cb_data, int (*callback) (int, void *)) // wait for sck and stdin
 {
     fd_set fdset;
     struct timeval tv;
@@ -83,7 +83,8 @@ int sck_wait_for_request (const int sck, const time_t delay, void *cb_data, int 
 
     while (1) {
         FD_ZERO(&fdset);
-        FD_SET(0, &fdset);
+        if (use_stdin)
+            FD_SET(0, &fdset);
         FD_SET(sck, &fdset);
         sel = select(max, &fdset, NULL, NULL, &tv);
 
@@ -95,7 +96,7 @@ int sck_wait_for_request (const int sck, const time_t delay, void *cb_data, int 
                 fprintf(stderr, "Timeout reached\n");
                 return -1;
             default:
-                if (FD_ISSET(0, &fdset)) {
+                if (use_stdin && FD_ISSET(0, &fdset)) {
                     if (callback(0, cb_data) == -1)
                         return -1;
                 }
