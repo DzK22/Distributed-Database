@@ -20,9 +20,8 @@ typedef struct {
     bool meet_success;
 } nodedata;
 
-int fd_can_read (int fd, void *data);
-int read_sck (nodedata *ndata);
-int exec_dg (const dgram *dg, nodedata *ndata);
+int sck_can_read (const int sck, void *data);
+int exec_dg (const dgram *dg, void *data);
 
 int exec_rnres_meet (const dgram *dg, nodedata *ndata);
 int exec_rreq_read (const dgram *dg, nodedata *ndata);
@@ -33,7 +32,7 @@ int exec_rreq_sync (const dgram *dg, nodedata *ndata);
 int exec_rreq_destroy (const dgram *dg, nodedata *ndata);
 
 int send_meet (nodedata *ndata);
-bool is_relais (const struct sockaddr_in *saddr, const nodedata *ndata);
+bool is_relais (const uint32_t addr, const in_port_t port, const nodedata *ndata);
 int delete_user_file_line (const char *username, const nodedata *ndata);
 
 #endif

@@ -44,6 +44,6 @@ int main (int argc, char **argv)
     if (send_meet(&ndata) == -1)
         return EXIT_FAILURE;
 
-    sck_wait_for_request(sck, 1200, false, &ndata, fd_can_read);
+    sck_wait_for_request(sck, 1200, false, &ndata, sck_can_read);
     return EXIT_FAILURE;
 }

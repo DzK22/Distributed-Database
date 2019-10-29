@@ -97,12 +97,14 @@ int dgram_check_timeout_delete (dgram **dgreceived);
 int dgram_check_timeout_resend (const int sock, dgram **dgsent);
 unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2);
 uint16_t dgram_checksum (const dgram *dg);
-int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data);
+int dgram_create (dgram **dgres, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data);
 dgram * dgram_add (dgram *dglist, dgram *dg);
 int dgram_send (const int sck, dgram *dg, dgram **dg_sent);
 void * thread_timeout_loop (void *arg);
 bool dgram_is_ready (const dgram *dg);
 bool dgram_verify_checksum (const dgram *dg);
 void dgram_debug (const dgram *dg);
+int dgram_create_send (const int sck, dgram **dgsent, dgram **dgres, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data); // sert juste a appeler les fonctions dgram_create et dgram_send en une fonction
+int dgram_process_raw (const int sck, dgram **dgsent, dgram **dgreceived, void *cb_data, int (*callback) (const dgram *, void *)); // ATTENTION ! callback est aooeké seulement si le diagramme créer / agrandi est ready !
 
 #endif

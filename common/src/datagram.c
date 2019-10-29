@@ -254,8 +254,14 @@ int dgram_create_raw (const dgram *dg, void *buf, size_t buf_size)
     return 0;
 }
 
-int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data)
+int dgram_create (dgram **dgres, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data)
 {
+    dgram *dg = malloc(sizeof(dgram));
+    if (dg == NULL) {
+        perror("malloc");
+        return -1;
+    }
+
     dg->id = id;
     dg->request = request;
     dg->status = status;
@@ -278,6 +284,7 @@ int dgram_create (dgram *dg, const uint16_t id, const uint8_t request, const uin
         return -1;
     }
 
+    *dgres = dg;
     return 0;
 }
 
@@ -360,4 +367,51 @@ void dgram_debug (const dgram *dg)
         return;
     d[dg->data_len] = '\0';
     printf("\033[35m -- DGRAM {id=%d,request=%d,status=%d,data_size=%d,data_len=%d,checksum=%d\n\tdata=%s\033[0m\n", dg->id, dg->request, dg->status, dg->data_size, dg->data_len, dg->checksum, d);
+}
+
+int dgram_create_send (const int sck, dgram **dgsent, dgram **dgres, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data)
+{
+    dgram *tmp;
+    if (dgres == NULL)
+        dgres = &tmp;
+
+    if (dgram_create(dgres, id, request, status, addr, port, data_size, data) == -1)
+        return -1;
+    if (dgram_send(sck, *dgres, dgsent) == -1)
+        return -1;
+    return 0;
+}
+
+int dgram_process_raw (const int sck, dgram **dgsent, dgram **dgreceived, void *cb_data, int (*callback) (const dgram *, void *))
+{
+    void *buf = malloc(SCK_DATAGRAM_MAX);
+    if (buf == NULL) {
+        perror("malloc");
+        return -1;
+    }
+    struct sockaddr_in saddr;
+    ssize_t bytes = sck_recv(sck, buf, SCK_DATAGRAM_MAX, &saddr);
+    if (bytes == -1)
+        return -1;
+
+    dgram dg;
+    if (dgram_add_from_raw(dgreceived, buf, bytes, &dg, &saddr) == -1)
+        return -1;
+
+    dgram_debug(&dg);
+    if (dgram_is_ready(&dg)) {
+        // SEND ACK
+        if (dg.request != ACK) {
+            if (dgram_create_send(sck, dgsent, NULL, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
+                return -1;
+        }
+
+        if (callback(&dg, cb_data) == -1)
+            return -1;
+        // supprimer ce dg
+        if (!dgram_del_from_id(dgreceived, dg.id))
+            return 1;
+    }
+
+    return 0;
 }

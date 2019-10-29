@@ -1,66 +1,26 @@
 #include "../headers/noeud.h"
 
-int fd_can_read (int fd, void *data)
+int sck_can_read (const int sck, void *data)
 {
+    (void) sck;
     nodedata *ndata = ((nodedata *) data);
-    if (fd == ndata->sck) {
-        if (read_sck(ndata) == -1)
-            return -1;
-    }
+    if (dgram_process_raw(ndata->sck, &ndata->dgsent, &ndata->dgreceived, ndata, exec_dg) == -1)
+        return -1;
 
     return 0;
 }
 
-int read_sck (nodedata *ndata)
+int exec_dg (const dgram *dg, void *data)
 {
-    void *buf = malloc(SCK_DATAGRAM_MAX);
-    if (buf == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    struct sockaddr_in saddr;
-    ssize_t bytes = sck_recv(ndata->sck, buf, SCK_DATAGRAM_MAX, &saddr);
-    if (bytes == -1)
-        return -1;
+    nodedata *ndata = data;
 
-    if (!is_relais(&saddr, ndata)) {
-        fprintf(stderr, "Un paquet ne provenant pas du relais a été rejeté\n");
+    // petite sécurité des familles
+    if (!is_relais(dg->addr, dg->port, ndata)) {
+        if (!dgram_del_from_id(&ndata->dgreceived, dg->id))
+            return -1;
         return 1;
     }
 
-    dgram dg;
-    if (dgram_add_from_raw(&ndata->dgreceived, buf, bytes, &dg, &saddr) == -1)
-        return -1;
-    free(buf);
-    dgram_debug(&dg);
-
-    if (dgram_is_ready(&dg)) {
-        printf("is rdy\n");
-        // SEND ACK
-        if (dg.request != ACK) {
-            dgram *ack = malloc(sizeof(dgram));
-            if (ack == NULL) {
-                perror("malloc");
-                return -1;
-            }
-            if (dgram_create(ack, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
-                return -1;
-            if (dgram_send(ndata->sck, ack, &ndata->dgsent) == -1)
-                return -1;
-        }
-
-        if (exec_dg(&dg, ndata) == -1)
-            return -1;
-        // supprimer ce dg
-        if (!dgram_del_from_id(&ndata->dgreceived, dg.id))
-            return 1;
-    }
-
-    return 0;
-}
-
-int exec_dg (const dgram *dg, nodedata *ndata)
-{
     switch (dg->request) {
         case RNRES_MEET:
             if (exec_rnres_meet(dg, ndata) == -1)
@@ -130,14 +90,7 @@ int exec_rreq_read (const dgram *dg, nodedata *ndata)
     // verifions que ce noeud possède bien le champs
     if (strncmp(field, ndata->field, strlen(field) + 1) != 0) {
         // envoyer err
-        dgram *newdg = malloc(sizeof(dgram));
-        if (newdg == NULL) {
-            perror("malloc");
-            return -1;
-        }
-        if (dgram_create(newdg, ndata->id_counter ++, NRES_READ, ERR_UNKNOWFIELD , dg->addr, dg->port, 0, NULL) == -1)
-            return -1;
-        if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
+        if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_READ, ERR_UNKNOWFIELD , dg->addr, dg->port, 0, NULL) == -1)
             return -1;
 
         return 1;
@@ -201,14 +154,7 @@ int exec_rreq_read (const dgram *dg, nodedata *ndata)
         return -1;
     }
 
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, ndata->id_counter ++, NRES_READ, SUC_READ, dg->addr, dg->port, val, buf) == -1)
-        return -1;
-    if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_READ, SUC_READ, dg->addr, dg->port, val, buf) == -1)
         return -1;
 
     return 0;
@@ -293,14 +239,7 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
         return -1;
     }
 
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, ndata->id_counter ++, NRES_WRITE, SUC_WRITE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
-        return -1;
-    if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_WRITE, SUC_WRITE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
         return -1;
 
     return 0;
@@ -334,14 +273,7 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
     }
 
     // envoyer succes au relais
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, ndata->id_counter ++, NRES_DELETE, SUC_DELETE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
-        return -1;
-    if (dgram_send(ndata->sck, newdg, &ndata->dgsent) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_DELETE, SUC_DELETE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
         return -1;
 
     return 0;
@@ -380,22 +312,15 @@ int send_meet (nodedata *ndata)
         return -1;
     }
 
-    dgram *dg = malloc(sizeof(dgram));
-    if (dg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(dg, ndata->id_counter ++, NREQ_MEET, NORMAL, ndata->relais_saddr.sin_addr.s_addr, ndata->relais_saddr.sin_port, bytes, buf) == -1)
-        return -1;
-    if (dgram_send(ndata->sck, dg, &ndata->dgsent) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NREQ_MEET, NORMAL, ndata->relais_saddr.sin_addr.s_addr, ndata->relais_saddr.sin_port, bytes, buf) == -1)
         return -1;
 
     return 0;
 }
 
-bool is_relais (const struct sockaddr_in *saddr, const nodedata *ndata)
+bool is_relais (const uint32_t addr, const in_port_t port, const nodedata *ndata)
 {
-    if ((saddr->sin_addr.s_addr == ndata->relais_saddr.sin_addr.s_addr) && (saddr->sin_port == ndata->relais_saddr.sin_port))
+    if ((addr == ndata->relais_saddr.sin_addr.s_addr) && (port == ndata->relais_saddr.sin_port))
         return true;
 
     return false;

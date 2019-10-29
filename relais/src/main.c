@@ -41,6 +41,6 @@ int main (int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    sck_wait_for_request(sck, 600, false, &rdata, fd_can_read);
+    sck_wait_for_request(sck, 600, false, &rdata, sck_can_read);
     return EXIT_FAILURE;
 }

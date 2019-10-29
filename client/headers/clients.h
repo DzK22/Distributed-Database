@@ -21,9 +21,8 @@ typedef struct clientdata_s {
 
 int fd_can_read (int fd, void *data);
 int read_stdin (clientdata *cdata);
-int read_sck (clientdata *cdata);
 int send_auth (const char *login, const char *password, clientdata *cdata);
-int exec_dg (const dgram *dg, clientdata *cdata);
+int exec_dg (const dgram *dg, void *data);
 void print_read_res (const dgram *dg);
 
 #endif

@@ -6,62 +6,19 @@
 
 #include "../headers/relais.h"
 
-int fd_can_read (int fd, void *data)
+int sck_can_read (const int sck, void *data)
 {
+    (void) sck;
     relaisdata *rdata = ((relaisdata *) data);
-    if (fd == rdata->sck) {
-        if (read_sck(rdata) == -1)
-            return -1;
-    }
+    if (dgram_process_raw(rdata->sck, &rdata->dgsent, &rdata->dgreceived, rdata, exec_dg) == -1)
+        return -1;
 
     return 0;
 }
 
-int read_sck (relaisdata *rdata)
+int exec_dg (const dgram *dg, void *data)
 {
-    void *buf = malloc(SCK_DATAGRAM_MAX);
-    if (buf == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    struct sockaddr_in saddr;
-    ssize_t bytes = sck_recv(rdata->sck, buf, SCK_DATAGRAM_MAX, &saddr);
-    if (bytes == -1)
-        return -1;
-
-    dgram dg;
-    if (dgram_add_from_raw(&rdata->dgreceived, buf, bytes, &dg, &saddr) == -1)
-        return -1;
-    free(buf);
-    dgram_debug(&dg);
-
-    if (dgram_is_ready(&dg)) {
-        printf("is rdy\n");
-        // SEND ACK
-        if (dg.request != ACK) {
-            dgram *ack = malloc(sizeof(dgram));
-            if (ack == NULL) {
-                perror("malloc");
-                return -1;
-            }
-            if (dgram_create(ack, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
-                return -1;
-            if (dgram_send(rdata->sck, ack, &rdata->dgsent) == -1)
-                return -1;
-        }
-
-        if (exec_dg(&dg, rdata) == -1)
-            return -1;
-        // supprimer ce dg
-        if (!dgram_del_from_id(&rdata->dgreceived, dg.id))
-            return 1;
-    }
-
-    return 0;
-}
-
-int exec_dg (const dgram *dg, relaisdata *rdata)
-{
+  relaisdata *rdata = data;
     switch (dg->request) {
         case CREQ_AUTH:
             if (exec_creq_auth(dg, rdata) == -1)
@@ -128,14 +85,7 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
     const char *login = strtok_r(dg->data, ":", &tmp);
     const char *password = strtok_r(NULL, ":", &tmp);
     if (!login || !password) {
-        dgram *newdg = malloc(sizeof(dgram));
-        if (newdg == NULL) {
-            perror("malloc");
-            return -1;
-        }
-        if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, ERR_SYNTAX, dg->addr, dg->port, 0, NULL) == -1)
-            return -1;
-        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_AUTH, ERR_SYNTAX, dg->addr, dg->port, 0, NULL) == -1)
             return -1;
        return 1;
     }
@@ -151,14 +101,7 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
 
         if (login_ok && password_ok) {
             if (test_auth(login, rdata)) {
-                dgram *newdg = malloc(sizeof(dgram));
-                if (newdg == NULL) {
-                    perror("malloc");
-                    return -1;
-                }
-                if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, ERR_ALREADYAUTH, dg->addr, dg->port, 0, NULL) == -1)
-                    return -1;
-                if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+                if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_AUTH, ERR_ALREADYAUTH, dg->addr, dg->port, 0, NULL) == -1)
                     return -1;
                 return 1;
             }
@@ -189,29 +132,14 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
             rdata->mugi->hosts[rdata->mugi->nb_hosts].saddr = saddr;
             rdata->mugi->nb_hosts ++;
 
-            dgram *newdg = malloc(sizeof(dgram));
-            if (newdg == NULL) {
-                perror("malloc");
-                return -1;
-            }
-            if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, SUC_AUTH, dg->addr, dg->port, 0, NULL) == -1)
-                return -1;
-            if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_AUTH, SUC_AUTH, dg->addr, dg->port, 0, NULL) == -1)
                 return -1;
 
-            dgram_debug(newdg);
             return 0;
         }
     }
 
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, rdata->id_counter ++, RRES_AUTH, ERR_AUTHFAILED, dg->addr, dg->port, 0, NULL) == -1)
-        return -1;
-    if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_AUTH, ERR_AUTHFAILED, dg->addr, dg->port, 0, NULL) == -1)
         return -1;
 
     return 1;
@@ -221,14 +149,7 @@ int exec_creq_read (const dgram *dg, relaisdata *rdata)
 {
     user *usr = read_has_rights(dg, rdata);
     if (usr == NULL) { // PAS LES DROITS
-        dgram *newdg = malloc(sizeof(dgram));
-        if (newdg == NULL) {
-            perror("malloc");
-            return -1;
-        }
-        if (dgram_create(newdg, rdata->id_counter ++, RRES_READ, ERR_NOPERM, dg->addr, dg->port, 0, NULL) == -1)
-            return -1;
-        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_READ, ERR_NOPERM, dg->addr, dg->port, 0, NULL) == -1)
             return -1;
         return 1;
     }
@@ -258,14 +179,7 @@ int exec_creq_read (const dgram *dg, relaisdata *rdata)
                 return -1;
             }
 
-            dgram *newdg = malloc(sizeof(dgram));
-            if (newdg == NULL) {
-                perror("malloc");
-                return -1;
-            }
-            if (dgram_create(newdg, rdata->id_counter ++, RREQ_READ, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, val, buf) == -1)
-                return -1;
-            if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_READ, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, val, buf) == -1)
                 return -1;
             cpt ++;
             break;
@@ -275,16 +189,8 @@ int exec_creq_read (const dgram *dg, relaisdata *rdata)
     }
 
     if (n_fields != cpt) {
-        dgram *newdg = malloc(sizeof(dgram));
-        if (newdg == NULL) {
-            perror("malloc");
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_READ, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
             return -1;
-        }
-        if (dgram_create(newdg, rdata->id_counter ++, RRES_READ, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
-            return -1;
-        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
-            return -1;
-        printf("err nonode sent\n");
         return 1;
     }
 
@@ -303,14 +209,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
     user *usr = get_user_from_dg(dg, rdata);
     if (usr == NULL) {
         // send err not auth
-        dgram *newdg = malloc(sizeof(dgram));
-        if (newdg == NULL) {
-            perror("malloc");
-            return -1;
-        }
-        if (dgram_create(newdg, rdata->id_counter ++, RRES_WRITE, ERR_NOTAUTH, dg->addr, dg->port, 0, NULL) == -1)
-            return -1;
-        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, ERR_NOTAUTH, dg->addr, dg->port, 0, NULL) == -1)
             return -1;
         return 1;
     }
@@ -340,28 +239,14 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
             }
 
             // send to node
-            dgram *newdg = malloc(sizeof(dgram));
-            if (newdg == NULL) {
-                perror("malloc");
-                return -1;
-            }
-            if (dgram_create(newdg, rdata->id_counter ++, RREQ_WRITE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, bytes, buf) == -1)
-                return -1;
-            if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_WRITE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, bytes, buf) == -1)
                 return -1;
             filled = true;
         }
 
         if (!filled) {
             // no node found for some field(s)
-            dgram *newdg = malloc(sizeof(dgram));
-            if (newdg == NULL) {
-                perror("malloc");
-                return -1;
-            }
-            if (dgram_create(newdg, rdata->id_counter ++, RRES_WRITE, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
-                return -1;
-            if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
                 return -1;
             return 1;
         }
@@ -375,14 +260,7 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
     user *usr = get_user_from_dg(dg, rdata);
     if (usr == NULL) {
         // not auth !
-        dgram *newdg = malloc(sizeof(dgram));
-        if (newdg == NULL) {
-            perror("malloc");
-            return -1;
-        }
-        if (dgram_create(newdg, rdata->id_counter ++, RRES_DELETE, ERR_NOTAUTH, dg->addr, dg->port, 0, NULL) == -1)
-            return -1;
-        if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, ERR_NOTAUTH, dg->addr, dg->port, 0, NULL) == -1)
             return -1;
         return 1;
     }
@@ -392,14 +270,7 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
       if (!rdata->mugi->nodes[i].active)
           continue;
 
-      dgram *newdg = malloc(sizeof(dgram));
-      if (newdg == NULL) {
-          perror("malloc");
-          return -1;
-      }
-      if (dgram_create(newdg, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
-          return -1;
-      if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
           return -1;
     }
 
@@ -423,14 +294,7 @@ int exec_nreq_logout (const dgram *dg, relaisdata *rdata)
 int exec_nreq_meet (const dgram *dg, relaisdata *rdata)
 {
     // send confirmation
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, rdata->id_counter ++, RNRES_MEET, SUC_MEET, dg->addr, dg->port, 0, NULL) == -1)
-        return -1;
-    if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RNRES_MEET, SUC_MEET, dg->addr, dg->port, 0, NULL) == -1)
         return -1;
 
     if (rdata->mugi->nb_nodes >= rdata->mugi->max_nodes) {
@@ -467,14 +331,7 @@ int exec_nreq_meet (const dgram *dg, relaisdata *rdata)
             }
 
             // SEND MSG GETDATA TO THIS NODE
-            dgram *newdg = malloc(sizeof(dgram));
-            if (newdg == NULL) {
-                perror("malloc");
-                return -1;
-            }
-            if (dgram_create(newdg, rdata->id_counter ++, RREQ_GETDATA, NORMAL, dg->addr, dg->port, 0, NULL) == -1)
-                return -1;
-            if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_GETDATA, NORMAL, dg->addr, dg->port, 0, NULL) == -1)
                 return -1;
 
             break;
@@ -514,14 +371,7 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL)
         return 1;
 
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, rdata->id_counter ++, RRES_READ, SUC_READ, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, strnlen(buf, DG_DATA_MAX), buf) == -1)
-        return -1;
-    if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_READ, SUC_READ, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, strnlen(buf, DG_DATA_MAX), buf) == -1)
         return -1;
 
     return 0;
@@ -543,14 +393,7 @@ int exec_nres_write (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL) // le client a été déconnecté entre temps
         return 1;
 
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, rdata->id_counter ++, RRES_WRITE, SUC_WRITE, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
-        return -1;
-    if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, SUC_WRITE, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
         return -1;
 
     return 0;
@@ -558,7 +401,7 @@ int exec_nres_write (const dgram *dg, relaisdata *rdata)
 
 int exec_nres_delete (const dgram *dg, relaisdata *rdata)
 {
-    // /!/ dg->data = <user> 
+    // /!/ dg->data = <user>
     char *username = dg->data;
 
     // envoyer success au client
@@ -566,14 +409,7 @@ int exec_nres_delete (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL) // le client s'est déconnecté entre temps
         return 1;
 
-    dgram *newdg = malloc(sizeof(dgram));
-    if (newdg == NULL) {
-        perror("malloc");
-        return -1;
-    }
-    if (dgram_create(newdg, rdata->id_counter ++, RRES_DELETE, SUC_DELETE, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
-        return -1;
-    if (dgram_send(rdata->sck, newdg, &rdata->dgsent) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, SUC_DELETE, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
         return -1;
 
     return 0;

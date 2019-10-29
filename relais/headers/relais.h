@@ -61,9 +61,8 @@ typedef struct {
 } relaisdata;
 
 
-int fd_can_read (int fd, void *data);
-int read_sck (relaisdata *rdata);
-int exec_dg (const dgram *dg, relaisdata *rdata);
+int sck_can_read (const int sck, void *data);
+int exec_dg (const dgram *dg, void *data);
 
 // traitement des paquets
 int exec_creq_auth (const dgram *dg, relaisdata *data);
