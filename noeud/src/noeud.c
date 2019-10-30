@@ -281,14 +281,73 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
 
 int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
 {
-    (void) dg, (void) ndata;
+    // dg->data = <RELAIS_NODE_ID>
+    FILE *datafile = fopen(ndata->datafile, "r");
+    if (datafile == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    char buf[DG_DATA_MAX];
+    char *line = NULL;
+    size_t n = 0;
+    int val;
+
+    // format message a envoyer: <RELAIS_NODE_ID>:<DATA>
+    int offset = sprintf(buf, "%s:", dg->data);
+    if (offset < 0) {
+        perror("sprintf");
+        return -1;
+    }
+    errno = 0;
+    while (getline(&line, &n, datafile) != -1) {
+        val = snprintf(buf + offset, DG_DATA_MAX - offset, "%s", line);
+        if (val < 0) {
+            perror("snprintf");
+            return -1;
+        } else if (val >= DG_DATA_MAX) {
+            fprintf(stderr, "snprintf truncate\n");
+            return 1;
+        }
+        offset += val;
+    }
+
+    if (errno != 0) {
+        perror("getline");
+        return -1;
+    }
+
+    if (fclose(datafile) == EOF) {
+        perror("fclose");
+        return -1;
+    }
+
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_GETDATA, SUC_GETDATA, dg->addr, dg->port, strnlen(buf, DG_DATA_MAX), buf) == -1)
+        return -1;
 
     return 0;
 }
 
 int exec_rreq_sync (const dgram *dg, nodedata *ndata)
 {
-    (void) dg, (void) ndata;
+    FILE *datafile = fopen(ndata->datafile, "w");
+    if (datafile == NULL) {
+        perror("fopen");
+        return -1;
+    }
+
+    if (fputs(dg->data, datafile) == EOF) {
+        perror("fputs");
+        return -1;
+    }
+
+    if (fclose(datafile) == EOF) {
+        perror("fclose");
+        return -1;
+    }
+
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_SYNC, SUC_SYNC, dg->addr, dg->port, 0, NULL) == -1)
+        return -1;
 
     return 0;
 }
@@ -395,29 +454,3 @@ int delete_user_file_line (const char *username, const nodedata *ndata)
 
     return 0;
 }
-
-/*
-int change_all_data (const node_data *ndata, const char *new_data) // args must be null terminated
-{
-    FILE *datafile = fopen(ndata->datafile, "w");
-    if (datafile == NULL) {
-        perror("fopen");
-        return -1;
-    }
-
-    if (fputs(new_data, datafile) == EOF) {
-        perror("fputs");
-        return -1;
-    }
-
-    if (fclose(datafile) == EOF) {
-        perror("fclose");
-        return -1;
-    }
-
-    return 0;
-}
-
-    return 0;
-}
-*/

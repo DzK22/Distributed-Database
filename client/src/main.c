@@ -49,6 +49,6 @@ int main (int argc, char **argv)
     if (send_auth(login, password, &cdata) == -1)
         return EXIT_FAILURE;
 
-    sck_wait_for_request(sck, 120, true, &cdata, fd_can_read);
+    sck_wait_for_request(sck, 300, true, &cdata, fd_can_read);
     return EXIT_FAILURE;
 }

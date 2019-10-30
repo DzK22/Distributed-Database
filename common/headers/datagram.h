@@ -54,6 +54,8 @@
 #define SUC_READ 42
 #define SUC_AUTH 43
 #define SUC_MEET 44
+#define SUC_SYNC 45
+#define SUC_GETDATA 46
 #define NORMAL 50
 #define ERR_NOREPLY 51
 #define ERR_AUTHFAILED 52
@@ -103,8 +105,10 @@ int dgram_send (const int sck, dgram *dg, dgram **dg_sent);
 void * thread_timeout_loop (void *arg);
 bool dgram_is_ready (const dgram *dg);
 bool dgram_verify_checksum (const dgram *dg);
-void dgram_debug (const dgram *dg);
+void dgram_debug (const dgram *dg, bool received);
 int dgram_create_send (const int sck, dgram **dgsent, dgram **dgres, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data); // sert juste a appeler les fonctions dgram_create et dgram_send en une fonction
 int dgram_process_raw (const int sck, dgram **dgsent, dgram **dgreceived, void *cb_data, int (*callback) (const dgram *, void *)); // ATTENTION ! callback est aooeké seulement si le diagramme créer / agrandi est ready !
+char * dgram_request_str (const dgram *dg);
+char * dgram_status_str (const dgram *dg);
 
 #endif

@@ -18,7 +18,7 @@ int sck_can_read (const int sck, void *data)
 
 int exec_dg (const dgram *dg, void *data)
 {
-  relaisdata *rdata = data;
+    relaisdata *rdata = data;
     switch (dg->request) {
         case CREQ_AUTH:
             if (exec_creq_auth(dg, rdata) == -1)
@@ -87,7 +87,7 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
     if (!login || !password) {
         if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_AUTH, ERR_SYNTAX, dg->addr, dg->port, 0, NULL) == -1)
             return -1;
-       return 1;
+        return 1;
     }
 
     char *flogin, *fpassword;
@@ -267,11 +267,11 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
 
     size_t i;
     for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
-      if (!rdata->mugi->nodes[i].active)
-          continue;
+        if (!rdata->mugi->nodes[i].active)
+            continue;
 
-      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
-          return -1;
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
+            return -1;
     }
 
     return 0;
@@ -320,18 +320,25 @@ int exec_nreq_meet (const dgram *dg, relaisdata *rdata)
 
     // si un noeud du meme type existe deja, ecraser les données du nouveau noeud par les siennes (surement plus à jour) envoie message a ce noeud pour lui demander toutes ses donnees
     size_t i;
-    for (i = 0; i < (rdata->mugi->nb_nodes - 1); i ++) {
-        if (strncmp(dg->data, rdata->mugi->nodes[i].field, MAX_ATTR) == 0) {
+    for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
+        if (rdata->mugi->nodes[i].id == (rdata->mugi->node_id_counter - 1))
+            continue;
+        else if (strncmp(dg->data, rdata->mugi->nodes[i].field, MAX_ATTR) == 0) {
             // bloquer temporairement le noeud car n'a pas les données a jour
             rdata->mugi->nodes[rdata->mugi->nb_nodes - 1].active = false;
-            char msg[N];
-            if (sprintf(msg, "getall %lu;", rdata->mugi->node_id_counter - 1) < 0) {
-                fprintf(stderr, "sprintf error\n");
-                return -1;
-            }
 
             // SEND MSG GETDATA TO THIS NODE
-            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_GETDATA, NORMAL, dg->addr, dg->port, 0, NULL) == -1)
+            // format message a envoyer = <NEW_NODE_ID>
+            char buf[DG_DATA_MAX];
+            int res = snprintf(buf, DG_DATA_MAX, "%ld", rdata->mugi->node_id_counter - 1);
+            if (res < 0) {
+                perror("snprintf");
+                return -1;
+            } else if (res >= DG_DATA_MAX) {
+                fprintf(stderr, "snprintf truncate\n");
+                return -1;
+            }
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_GETDATA, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, res, buf) == -1)
                 return -1;
 
             break;
@@ -353,7 +360,7 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
         return 1;
     }
 
-    node *nd = get_node_field_from_dg(dg, rdata);
+    node *nd = get_node_from_dg(dg, rdata);
     if (nd == NULL)
         return 1;
 
@@ -417,14 +424,42 @@ int exec_nres_delete (const dgram *dg, relaisdata *rdata)
 
 int exec_nres_getdata (const dgram *dg, relaisdata *rdata)
 {
-    (void) dg, (void) rdata;
+    // dg->data = <NODE_ID>:<DATA>
+    char data_cpy[DG_DATA_MAX];
+    strncpy(data_cpy, dg->data, DG_DATA_MAX);
+    char *tmp;
+    char *node_id = strtok_r(data_cpy, ":", &tmp);
+    const size_t did = atol(node_id);
+    char *node_data = NULL;
+    if (dg->data_len >= (did + 2))
+        node_data = node_id + strlen(node_id) + 1;
+
+    if (!node_id || !node_data) {
+        // que fait dans ce cas ? redemander au noeud ? (lui envoyer une erreur n'est surement pas utile
+        // peut etre demander a un autre noeud ?
+        return 1;
+    }
+
+    // envoyer les nouvelles données au noeud qui a l'id "data_id"
+    for (size_t i = 0; i < rdata->mugi->nb_nodes; i ++) {
+        if (rdata->mugi->nodes[i].id != did)
+            continue;
+
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_SYNC, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strlen(node_data), node_data) == -1)
+            return -1;
+
+        break;
+    }
 
     return 0;
 }
 
 int exec_nres_sync (const dgram *dg, relaisdata *rdata)
 {
-    (void) dg, (void) rdata;
+    // juste mettre active = true pour le node concerné
+    node *nd = get_node_from_dg(dg, rdata);
+    if (nd == NULL)
+        return 1;
 
     return 0;
 }
@@ -433,29 +468,29 @@ auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata
 {
     size_t i, login_len = strlen(login);
     for (i = 0; i < rdata->mugi->nb_hosts; i ++) {
-       if (strncmp(login, rdata->mugi->hosts[i].login, login_len) == 0)
-           return &rdata->mugi->hosts[i];
+        if (strncmp(login, rdata->mugi->hosts[i].login, login_len) == 0)
+            return &rdata->mugi->hosts[i];
     }
 
     return NULL;
 }
 
-node * get_node_field_from_dg (const dgram *dg, const relaisdata *rdata)
+node * get_node_from_dg (const dgram *dg, const relaisdata *rdata)
 {
-  size_t i;
-  bool ip_ok, port_ok;
-  for (i = 0; i < rdata->mugi->nb_nodes; i ++)
-  {
-    ip_ok = dg->addr == rdata->mugi->nodes[i].saddr.sin_addr.s_addr;
-    if (!ip_ok)
-        continue;
-    port_ok = dg->port == rdata->mugi->nodes[i].saddr.sin_port;
-    if (!port_ok)
-        continue;
+    size_t i;
+    bool ip_ok, port_ok;
+    for (i = 0; i < rdata->mugi->nb_nodes; i ++)
+    {
+        ip_ok = dg->addr == rdata->mugi->nodes[i].saddr.sin_addr.s_addr;
+        if (!ip_ok)
+            continue;
+        port_ok = dg->port == rdata->mugi->nodes[i].saddr.sin_port;
+        if (!port_ok)
+            continue;
 
-    return &rdata->mugi->nodes[i];
-  }
-  return NULL;
+        return &rdata->mugi->nodes[i];
+    }
+    return NULL;
 }
 
 user * get_user_from_dg (const dgram *dg, const relaisdata *rdata)
@@ -566,8 +601,8 @@ mugiwara *init_mugiwara ()
     char *str;
     if (fseek(fp, 0, SEEK_SET) == -1)
     {
-      perror("fseek error");
-      return NULL;
+        perror("fseek error");
+        return NULL;
     }
 
     for (i = 0; i < nb_lines; i ++) {
@@ -604,46 +639,3 @@ mugiwara *init_mugiwara ()
 
     return mugi;
 }
-
-/*
-
-int follow_getallres (const int sock, clientreq *creq, mugiwara *mugi)
-{
-    // message de creq = id_node:data;
-    size_t to_id;
-    char data[N];
-    switch (sscanf(creq->message, "%lu:%s;", &to_id, data)) {
-        case EOF:
-            perror("sscanf");
-            return -1;
-        case 2: // no problem
-            break;
-        default: // problem, mais ne pas quitter le prog => 0
-            fprintf(stderr, "follow_getallres: sscanf, cannot assign all items\n");
-            return 1;
-    }
-
-    // envoyer les nouvelles données au noeud qui a l'id "to_id"
-    char msg[N];
-    int res;
-    res = snprintf(msg, N, "changeall %s;", data);
-    if (res >= N) {
-        fprintf(stderr, "sprintf error\n");
-        return -1;
-    } else if (res < 0) {
-        perror("snprintf");
-        return -1;
-    }
-
-    size_t i;
-    for (i = 0; i < mugi->nb_nodes; i ++) {
-        if (mugi->nodes[i].id == to_id) {
-            if (send_toclient(sock, msg, &mugi->nodes[i].saddr) == -1)
-                return -1;
-            break;
-        }
-    }
-
-    return 0;
-}
-*/

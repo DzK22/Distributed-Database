@@ -86,7 +86,7 @@ mugiwara *init_mugiwara ();
 
 user * get_user_from_dg (const dgram *dg, const relaisdata *rdata);
 
-node * get_node_field_from_dg (const dgram *dg, const relaisdata *rdata);
+node * get_node_from_dg (const dgram *dg, const relaisdata *rdata);
 
 auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata);
 /*

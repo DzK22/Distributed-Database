@@ -298,7 +298,7 @@ uint16_t dgram_checksum (const dgram *dg)
     unsigned i;
     for (i = 0; i < dg->data_size; i ++) {
         c = dg->data[i];
-        sum += c * i;
+        sum += c * (i + 1);
     }
 
     return (uint16_t) (sum % ((long long unsigned) pow(2, 16)));
@@ -314,6 +314,8 @@ dgram * dgram_add (dgram *dglist, dgram *dg) // /!/ dg doit avoir été alloué 
 
 int dgram_send (const int sck, dgram *dg, dgram **dg_sent)
 {
+    dgram_debug(dg, false);
+
     *dg_sent = dgram_add(*dg_sent, dg);
     struct sockaddr_in saddr;
     saddr.sin_family = AF_INET;
@@ -359,14 +361,26 @@ bool dgram_verify_checksum (const dgram *dg)
     return false;
 }
 
-void dgram_debug (const dgram *dg)
+void dgram_debug (const dgram *dg, bool received) // !received = sent
 {
     char d[DG_DATA_MAX];
     memcpy(d, dg->data, dg->data_len);
     if (dg->data_len >= (DG_DATA_MAX - 1))
         return;
     d[dg->data_len] = '\0';
-    printf("\033[35m -- DGRAM {id=%d,request=%d,status=%d,data_size=%d,data_len=%d,checksum=%d\n\tdata=%s\033[0m\n", dg->id, dg->request, dg->status, dg->data_size, dg->data_len, dg->checksum, d);
+
+    if (received)
+        printf("\033[35m  >> [IN] ");
+    else
+        printf("\033[34m  << [OUT] ");
+
+    printf("DGRAM {");
+
+    if (dg->request == ACK)
+        printf("(ACK pour) id=");
+    else
+        printf("id=");
+    printf("%d, request=%s, status=%s, data_size=%d, data_len=%d, checksum=%d\n\tdata=%s\033[0m\n", dg->id, dgram_request_str(dg), dgram_status_str(dg), dg->data_size, dg->data_len, dg->checksum, d);
 }
 
 int dgram_create_send (const int sck, dgram **dgsent, dgram **dgres, const uint16_t id, const uint8_t request, const uint8_t status, const uint32_t addr, const in_port_t port, const uint16_t data_size, const char *data)
@@ -398,8 +412,14 @@ int dgram_process_raw (const int sck, dgram **dgsent, dgram **dgreceived, void *
     if (dgram_add_from_raw(dgreceived, buf, bytes, &dg, &saddr) == -1)
         return -1;
 
-    dgram_debug(&dg);
+    dgram_debug(&dg, true);
+
     if (dgram_is_ready(&dg)) {
+        if (!dgram_verify_checksum(&dg)) { // données erronées => jeter paquet
+            dgram_del_from_id(dgreceived, dg.id);
+            return 1;
+        }
+
         // SEND ACK
         if (dg.request != ACK) {
             if (dgram_create_send(sck, dgsent, NULL, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
@@ -414,4 +434,104 @@ int dgram_process_raw (const int sck, dgram **dgsent, dgram **dgreceived, void *
     }
 
     return 0;
+}
+
+char * dgram_request_str (const dgram *dg)
+{
+    switch (dg->request) {
+        case ACK:
+            return "ACK";
+        case CREQ_AUTH:
+            return "CREQ_AUTH";
+        case CREQ_READ:
+            return "CREQ_READ";
+        case CREQ_WRITE:
+            return "CREQ_WRITE";
+        case CREQ_DELETE:
+            return "CREQ_DELETE";
+        case CREQ_LOGOUT:
+            return "CREQ_LOGOUT";
+        case RREQ_READ:
+            return "RREQ_READ";
+        case RREQ_WRITE:
+            return "RREQ_WRITE";
+        case RREQ_DELETE:
+            return "RREQ_DELETE";
+        case RREQ_GETDATA:
+            return "RREQ_GETDATA";
+        case RREQ_SYNC:
+            return "RREQ_SYNC";
+        case RREQ_DESTROY:
+            return "RREQ_DESTROY";
+        case NREQ_LOGOUT:
+            return "NREQ_LOGOUT";
+        case NREQ_MEET:
+            return "NREQ_MEET";
+        case NRES_READ:
+            return "NRES_READ";
+        case NRES_WRITE:
+            return "NRES_WRITE";
+        case NRES_DELETE:
+            return "NRES_DELETE";
+        case NRES_GETDATA:
+            return "NRES_GETDATA";
+        case NRES_SYNC:
+            return "NRES_SYNC";
+        case RRES_AUTH:
+            return "RRES_AUTH";
+        case RRES_READ:
+            return "RRES_READ";
+        case RRES_WRITE:
+            return "RRES_WRITE";
+        case RRES_DELETE:
+            return "RRES_DELETE";
+        case RNRES_MEET:
+            return "RNRES_MEET";
+        default:
+            return "UNDEFINED";
+    }
+}
+
+char * dgram_status_str (const dgram *dg)
+{
+    switch (dg->status) {
+        case SUC_DELETE:
+            return "SUC_DELETE";
+        case SUC_WRITE:
+            return "SUC_WRITE";
+        case SUC_READ:
+            return "SUC_READ";
+        case SUC_AUTH:
+            return "SUC_AUTH";
+        case SUC_MEET:
+            return "SUC_MEET";
+        case SUC_SYNC:
+            return "SUC_SYNC";
+        case SUC_GETDATA:
+            return "SUC_GETDATA";
+        case NORMAL:
+            return "NORMAL";
+        case ERR_NOREPLY:
+            return "ERR_NOREPLY";
+        case ERR_AUTHFAILED:
+            return "ERR_AUTHFAILED";
+        case ERR_NOPERM:
+            return "ERR_NOPERM";
+        case ERR_NONODE:
+            return "ERR_NONODE";
+        case ERR_SYNTAX:
+            return "ERR_SYNTAX";
+        case ERR_UNKNOWFIELD:
+            return "ERR_UNKNOWFIELD";
+        case ERR_WRITE:
+            return "ERR_WRITE";
+        case ERR_DELETE:
+            return "ERR_DELETE";
+        case ERR_NOTAUTH:
+            return "ERR_NOTAUTH";
+        case ERR_ALREADYAUTH:
+            return "ERR_ALREADYAUTH";
+        default:
+            return "UNDEFINED";
+    }
 }
