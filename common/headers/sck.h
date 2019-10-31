@@ -18,6 +18,8 @@
 #include <sys/time.h>
 #include <stdint.h>
 #include <math.h>
+#include <time.h>
+#include <semaphore.h>
 
 #define SCK_DATAGRAM_MAX 65546 // DG_DATA_MAX + DG_HEADER_SIZE de datagram.h
 

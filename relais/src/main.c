@@ -30,13 +30,25 @@ int main (int argc, char **argv)
     rdata.id_counter = 0;
     rdata.mugi = mugi;
 
-    // start thread
+    if (sem_init(&rdata.sem, 0, 1) == -1) {
+        perror("sem_init");
+        return EXIT_FAILURE;
+    }
+
+    // start thread for dgrams
     pthread_t th;
     thread_targ targ;
     targ.sck = rdata.sck;
     targ.dgsent = &rdata.dgsent;
     targ.dgreceived = &rdata.dgreceived;
     if ((errno = pthread_create(&th, NULL, thread_timeout_loop, &targ)) != 0) {
+        perror("pthread_create");
+        return EXIT_FAILURE;
+    }
+
+    // start thread for checking authusers and nodes
+    pthread_t rthread;
+    if ((errno = pthread_create(&rthread, NULL, rthread_check_loop, &rdata)) != 0) {
         perror("pthread_create");
         return EXIT_FAILURE;
     }

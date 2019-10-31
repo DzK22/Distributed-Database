@@ -50,8 +50,9 @@ int exec_dg (const dgram *dg, void *data)
             if (exec_rreq_destroy(dg, ndata) == -1)
                 return -1;
             break;
+        case PING:
+            break;
         case ACK:
-            dgram_del_from_id(&ndata->dgsent, dg->id);
             break;
         default:
             fprintf(stderr, "Paquet reçu avec requete non gérée par le noeud: %d\n", dg->request);
@@ -62,7 +63,7 @@ int exec_dg (const dgram *dg, void *data)
 
 int exec_rnres_meet (const dgram *dg, nodedata *ndata)
 {
-    if (dg->status == SUC_MEET)
+    if (dg->status == SUCCESS)
         ndata->meet_success = true;
     else
         return -1;
@@ -154,7 +155,7 @@ int exec_rreq_read (const dgram *dg, nodedata *ndata)
         return -1;
     }
 
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_READ, SUC_READ, dg->addr, dg->port, val, buf) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_READ, SUCCESS, dg->addr, dg->port, val, buf) == -1)
         return -1;
 
     return 0;
@@ -239,7 +240,7 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
         return -1;
     }
 
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_WRITE, SUC_WRITE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_WRITE, SUCCESS, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
         return -1;
 
     return 0;
@@ -273,7 +274,7 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
     }
 
     // envoyer succes au relais
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_DELETE, SUC_DELETE, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_DELETE, SUCCESS, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
         return -1;
 
     return 0;
@@ -322,7 +323,7 @@ int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
         return -1;
     }
 
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_GETDATA, SUC_GETDATA, dg->addr, dg->port, strnlen(buf, DG_DATA_MAX), buf) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_GETDATA, SUCCESS, dg->addr, dg->port, strnlen(buf, DG_DATA_MAX), buf) == -1)
         return -1;
 
     return 0;
@@ -346,7 +347,7 @@ int exec_rreq_sync (const dgram *dg, nodedata *ndata)
         return -1;
     }
 
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_SYNC, SUC_SYNC, dg->addr, dg->port, 0, NULL) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_SYNC, SUCCESS, dg->addr, dg->port, 0, NULL) == -1)
         return -1;
 
     return 0;

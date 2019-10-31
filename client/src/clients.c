@@ -30,7 +30,10 @@ int read_stdin (clientdata *cdata)
     }
 
     if (!cdata->is_auth) {
-        dgram_print_status(ERR_NOTAUTH);
+        dgram tmp;
+        tmp.status = ERR_NOTAUTH;
+        tmp.request = RRES_AUTH;
+        dgram_print_status(&tmp);
         return 1;
     }
 
@@ -59,12 +62,16 @@ int read_stdin (clientdata *cdata)
         instr_len = 10;
         arg = false;
     } else {
-        dgram_print_status(ERR_SYNTAX);
+        dgram tmp;
+        tmp.status = ERR_SYNTAX;
+        dgram_print_status(&tmp);
         return 1;
     }
 
     if ((!arg && (data_len > instr_len)) || (arg && (data_len <= instr_len))) {
-        dgram_print_status(ERR_SYNTAX);
+        dgram tmp;
+        tmp.status = ERR_SYNTAX;
+        dgram_print_status(&tmp);
         return 1;
     }
 
@@ -79,26 +86,27 @@ int exec_dg (const dgram *dg, void *data)
    clientdata *cdata = data;
     switch (dg->request) {
         case RRES_AUTH:
-            dgram_print_status(dg->status);
-            if (dg->status == SUC_AUTH)
+            dgram_print_status(dg);
+            if (dg->status == SUCCESS)
                 cdata->is_auth = true;
             else  // exec, print & quit
                 return -1;
             break;
         case RRES_READ:
-            if (dg->status == SUC_READ)
+            if (dg->status == SUCCESS)
                 print_read_res(dg);
             else
-                dgram_print_status(dg->status);
+                dgram_print_status(dg);
             break;
         case RRES_WRITE:
-            dgram_print_status(dg->status);
+            dgram_print_status(dg);
             break;
         case RRES_DELETE:
-            dgram_print_status(dg->status);
+            dgram_print_status(dg);
             break;
         case ACK:
-            dgram_del_from_id(&cdata->dgsent, dg->id);
+            break;
+        case PING:
             break;
         default:
             fprintf(stderr, "Paquet reçu avec requete non gérée par le client: %d\n", dg->request);

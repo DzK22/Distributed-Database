@@ -1,23 +1,27 @@
 #include "../headers/datagram.h"
 
-int dgram_print_status (const uint8_t status)
+int dgram_print_status (const dgram *dg)
 {
-    if (status > NORMAL) // error
-        printf("\033[91mErreur: "); // red
-    else if (status < NORMAL)
-        printf("\033[92mSuccès: "); // green
-    else // == NORMAL
+    if (dg->status == NORMAL) // error
         printf("\033[96m"); // cyan
+    else if (dg->status == SUCCESS)
+        printf("\033[92m"); // green
+    else // error
+        printf("\033[91m"); // red
 
-    switch (status) {
-        case SUC_DELETE:
-            printf("La suppression a réussie");
-            break;
-        case SUC_WRITE:
-            printf("L'écriture à réussie");
-            break;
-        case SUC_AUTH:
-            printf("L'authentification à réussie");
+    switch (dg->status) {
+        case SUCCESS:
+            switch (dg->request) {
+                case RRES_AUTH:
+                    printf("L'authentification a réussie");
+                    break;
+                case RRES_WRITE:
+                    printf("L'écriture a réussie");
+                    break;
+                case RRES_DELETE:
+                    printf("La suppression a réussie");
+                    break;
+            }
             break;
         case NORMAL:
             break;
@@ -441,6 +445,8 @@ char * dgram_request_str (const dgram *dg)
     switch (dg->request) {
         case ACK:
             return "ACK";
+        case PING:
+            return "PING";
         case CREQ_AUTH:
             return "CREQ_AUTH";
         case CREQ_READ:
@@ -495,20 +501,8 @@ char * dgram_request_str (const dgram *dg)
 char * dgram_status_str (const dgram *dg)
 {
     switch (dg->status) {
-        case SUC_DELETE:
-            return "SUC_DELETE";
-        case SUC_WRITE:
-            return "SUC_WRITE";
-        case SUC_READ:
-            return "SUC_READ";
-        case SUC_AUTH:
-            return "SUC_AUTH";
-        case SUC_MEET:
-            return "SUC_MEET";
-        case SUC_SYNC:
-            return "SUC_SYNC";
-        case SUC_GETDATA:
-            return "SUC_GETDATA";
+        case SUCCESS:
+            return "SUCCESS";
         case NORMAL:
             return "NORMAL";
         case ERR_NOREPLY:

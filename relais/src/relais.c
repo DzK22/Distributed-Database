@@ -10,8 +10,16 @@ int sck_can_read (const int sck, void *data)
 {
     (void) sck;
     relaisdata *rdata = ((relaisdata *) data);
+    if (sem_wait(&rdata->sem) == -1) {
+        perror("sem_wait");
+        return -1;
+    }
     if (dgram_process_raw(rdata->sck, &rdata->dgsent, &rdata->dgreceived, rdata, exec_dg) == -1)
         return -1;
+    if (sem_post(&rdata->sem) == -1) {
+        perror("sem_post");
+        return -1;
+    }
 
     return 0;
 }
@@ -19,6 +27,8 @@ int sck_can_read (const int sck, void *data)
 int exec_dg (const dgram *dg, void *data)
 {
     relaisdata *rdata = data;
+    printf("nb nodes = %ld | nb hosts = %ld\n", rdata->mugi->nb_nodes, rdata->mugi->nb_hosts);
+    update_last_mess_time_from_dg(dg, rdata);
     switch (dg->request) {
         case CREQ_AUTH:
             if (exec_creq_auth(dg, rdata) == -1)
@@ -68,8 +78,9 @@ int exec_dg (const dgram *dg, void *data)
             if (exec_nres_sync(dg, rdata) == -1)
                 return -1;
             break;
+        case PING:
+            break;
         case ACK:
-            dgram_del_from_id(&rdata->dgsent, dg->id);
             break;
         default:
             fprintf(stderr, "Paquet reçu avec requete non gérée par le relais: %d\n", dg->request);
@@ -81,7 +92,6 @@ int exec_dg (const dgram *dg, void *data)
 int exec_creq_auth (const dgram *dg, relaisdata *rdata)
 {
     char *tmp;
-    printf("data len = %d\n", dg->data_len);
     const char *login = strtok_r(dg->data, ":", &tmp);
     const char *password = strtok_r(NULL, ":", &tmp);
     if (!login || !password) {
@@ -130,9 +140,10 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
             saddr.sin_port = dg->port;
 
             rdata->mugi->hosts[rdata->mugi->nb_hosts].saddr = saddr;
+            rdata->mugi->hosts[rdata->mugi->nb_hosts].last_mess_time = time(NULL);
             rdata->mugi->nb_hosts ++;
 
-            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_AUTH, SUC_AUTH, dg->addr, dg->port, 0, NULL) == -1)
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_AUTH, SUCCESS, dg->addr, dg->port, 0, NULL) == -1)
                 return -1;
 
             return 0;
@@ -294,7 +305,7 @@ int exec_nreq_logout (const dgram *dg, relaisdata *rdata)
 int exec_nreq_meet (const dgram *dg, relaisdata *rdata)
 {
     // send confirmation
-    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RNRES_MEET, SUC_MEET, dg->addr, dg->port, 0, NULL) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RNRES_MEET, SUCCESS, dg->addr, dg->port, 0, NULL) == -1)
         return -1;
 
     if (rdata->mugi->nb_nodes >= rdata->mugi->max_nodes) {
@@ -315,6 +326,7 @@ int exec_nreq_meet (const dgram *dg, relaisdata *rdata)
     rdata->mugi->nodes[rdata->mugi->nb_nodes].saddr = saddr;
     rdata->mugi->nodes[rdata->mugi->nb_nodes].id = rdata->mugi->node_id_counter;
     rdata->mugi->nodes[rdata->mugi->nb_nodes].active = true;
+    rdata->mugi->nodes[rdata->mugi->nb_nodes].last_mess_time = time(NULL);
     rdata->mugi->nb_nodes ++;
     rdata->mugi->node_id_counter ++;
 
@@ -378,7 +390,7 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL)
         return 1;
 
-    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_READ, SUC_READ, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, strnlen(buf, DG_DATA_MAX), buf) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_READ, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, strnlen(buf, DG_DATA_MAX), buf) == -1)
         return -1;
 
     return 0;
@@ -400,7 +412,7 @@ int exec_nres_write (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL) // le client a été déconnecté entre temps
         return 1;
 
-    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, SUC_WRITE, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
         return -1;
 
     return 0;
@@ -416,7 +428,7 @@ int exec_nres_delete (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL) // le client s'est déconnecté entre temps
         return 1;
 
-    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, SUC_DELETE, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
+    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
         return -1;
 
     return 0;
@@ -460,6 +472,7 @@ int exec_nres_sync (const dgram *dg, relaisdata *rdata)
     node *nd = get_node_from_dg(dg, rdata);
     if (nd == NULL)
         return 1;
+    nd->active = true;
 
     return 0;
 }
@@ -541,7 +554,6 @@ user * read_has_rights (const dgram *dg, const relaisdata *rdata)
             }
         }
         if (!found) {
-            fprintf(stderr, "not found for attr = |%s|\n", attr);
             return NULL;
         }
         attr = strtok_r(NULL, ",", &tmp);
@@ -638,4 +650,82 @@ mugiwara *init_mugiwara ()
     }
 
     return mugi;
+}
+
+void update_last_mess_time_from_dg (const dgram *dg, relaisdata *rdata)
+{
+    bool force_alltests = (dg->request == ACK); // rajouter autres si nécéssaire
+    if (force_alltests || ((dg->request >= 1) && (dg->request < 10))) {
+        // Client message
+        user *usr = get_user_from_dg(dg, rdata);
+        if (usr == NULL)
+            goto here;
+        auth_user *authusr = get_auth_user_from_login(usr->login, rdata);
+        if (authusr == NULL)
+            goto here;
+        authusr->last_mess_time = time(NULL);
+    }
+
+here:
+    if (force_alltests || ((dg->request >= 20) && (dg->request < 30))) {
+        // Node message
+        node *nd = get_node_from_dg(dg, rdata);
+        if (nd == NULL)
+            return;
+        nd->last_mess_time = time(NULL);
+    } // else => rien a faire
+}
+
+void * rthread_check_loop (void *data)
+{
+    relaisdata *rdata = data;
+    unsigned i;
+    time_t now;
+    while (1) {
+        sleep(1);
+        now = time(NULL);
+        if (sem_wait(&rdata->sem) == -1) {
+            perror("sem_wait");
+            return NULL;
+        }
+
+        // check for authusers
+        for (i = 0; i < rdata->mugi->nb_hosts; i ++) {
+            if ((now - rdata->mugi->hosts[i].last_mess_time) > DISCONNECT_TIMEOUT) {
+                // delete the authuser
+                printf("SUPPRESSION HOST - TIMEOUT REACHED\n");
+                if (i < (rdata->mugi->nb_hosts - 1))
+                    memmove(&rdata->mugi->hosts[i], &rdata->mugi->hosts[i + 1], sizeof(auth_user) * (rdata->mugi->nb_hosts - i - 1));
+                rdata->mugi->nb_hosts --;
+                i --;
+
+            } else if ((now - rdata->mugi->hosts[i].last_mess_time) > PING_TIMEOUT) {
+                // send PING mess
+                if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, PING, NORMAL, rdata->mugi->hosts[i].saddr.sin_addr.s_addr, rdata->mugi->hosts[i].saddr.sin_port, 0, NULL) == -1)
+                    return NULL;
+            }
+        }
+
+        // check for nodes
+        for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
+            if ((now - rdata->mugi->nodes[i].last_mess_time) > DISCONNECT_TIMEOUT) {
+                // delete the node
+                printf("SUPPRESSION NODE - TIMEOUT REACHED\n");
+                if (i < (rdata->mugi->nb_nodes - 1))
+                    memmove(&rdata->mugi->nodes[i], &rdata->mugi->nodes[i + 1], sizeof(node) * (rdata->mugi->nb_nodes - i - 1));
+                rdata->mugi->nb_nodes --;
+                i --;
+
+            } else if ((now - rdata->mugi->nodes[i].last_mess_time) > PING_TIMEOUT) {
+                // send PING mess
+                if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, PING, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, 0, NULL) == -1)
+                    return NULL;
+            }
+        }
+
+        if (sem_post(&rdata->sem) == -1) {
+            perror("sem_post");
+            return NULL;
+        }
+    }
 }
