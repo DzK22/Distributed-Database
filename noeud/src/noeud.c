@@ -38,14 +38,14 @@ int exec_dg (const dgram *dg, void *data)
             if (exec_rreq_delete(dg, ndata) == -1)
                 return -1;
             break;
-      /*  case RREQ_GETDATA:
+        case RREQ_GETDATA:
             if (exec_rreq_getdata(dg, ndata) == -1)
                 return -1;
-            break;*/
-        /*case RREQ_SYNC:
+            break;
+        case RREQ_SYNC:
             if (exec_rreq_sync(dg, ndata) == -1)
                 return -1;
-            break;*/
+            break;
         /*case RREQ_DESTROY:
             if (exec_rreq_destroy(dg, ndata) == -1)
                 return -1;
@@ -104,6 +104,7 @@ int exec_rreq_read (const dgram *dg, nodedata *ndata)
     {
       len = strnlen(data, DG_DATA_MAX);
       strncat(data, ndata->datas[i].login, DG_DATA_MAX - len -1);
+      strcat(data, ":");
       strncat(data, ndata->datas[i].value, DG_DATA_MAX - len -1);
       if (len >= DG_DATA_MAX)
           break;
@@ -195,78 +196,46 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
     return 0;
 }
 
-/*int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
+int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
 {
     // dg->data = <RELAIS_NODE_ID>
-    FILE *datafile = fopen(ndata->datafile, "r");
-    if (datafile == NULL) {
-        perror("fopen");
-        return -1;
-    }
-
     char buf[DG_DATA_MAX];
-    char *line = NULL;
-    size_t n = 0;
-    int val;
 
     // format message a envoyer: <RELAIS_NODE_ID>:<DATA>
-    int offset = sprintf(buf, "%s:", dg->data);
-    if (offset < 0) {
-        perror("sprintf");
-        return -1;
-    }
-    errno = 0;
-    while (getline(&line, &n, datafile) != -1) {
-        val = snprintf(buf + offset, DG_DATA_MAX - offset, "%s", line);
-        if (val < 0) {
-            perror("snprintf");
-            return -1;
-        } else if (val >= DG_DATA_MAX) {
-            fprintf(stderr, "snprintf truncate\n");
-            return 1;
-        }
-        offset += val;
-    }
+    sprintf(buf, "%s:", dg->data);
 
-    if (errno != 0) {
-        perror("getline");
-        return -1;
+    size_t i;
+    for (i = 0; i < ndata->nb_infos; i++)
+    {
+      strcat(buf, ndata->datas[i].login);
+      strcat(buf, ",");
+      strcat(buf, ndata->datas[i].value);
+      strcat(buf, ";");
     }
-
-    if (fclose(datafile) == EOF) {
-        perror("fclose");
-        return -1;
-    }
-
+    printf("buf = %s\n", buf);
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_GETDATA, SUCCESS, dg->addr, dg->port, strnlen(buf, DG_DATA_MAX), buf) == -1)
         return -1;
 
     return 0;
-}*/
+}
 
-/*int exec_rreq_sync (const dgram *dg, nodedata *ndata)
+int exec_rreq_sync (const dgram *dg, nodedata *ndata)
 {
-    FILE *datafile = fopen(ndata->datafile, "w");
-    if (datafile == NULL) {
-        perror("fopen");
-        return -1;
-    }
-
-    if (fputs(dg->data, datafile) == EOF) {
-        perror("fputs");
-        return -1;
-    }
-
-    if (fclose(datafile) == EOF) {
-        perror("fclose");
-        return -1;
+    char *tmp, *tmp2;
+    char *rest = dg->data;
+    while ((tmp = (strtok_r(rest, ";", &rest))) != NULL)
+    {
+      tmp2 = strtok_r(tmp, ",", &tmp);
+      strncpy(ndata->datas[ndata->nb_infos].login, tmp2, strlen(tmp2));
+      strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
+      ndata->nb_infos++;
     }
 
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_SYNC, SUCCESS, dg->addr, dg->port, 0, NULL) == -1)
         return -1;
 
     return 0;
-}*/
+}
 
 int exec_rreq_destroy (const dgram *dg, nodedata *ndata)
 {
