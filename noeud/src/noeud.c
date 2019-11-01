@@ -38,18 +38,18 @@ int exec_dg (const dgram *dg, void *data)
             if (exec_rreq_delete(dg, ndata) == -1)
                 return -1;
             break;
-        case RREQ_GETDATA:
+      /*  case RREQ_GETDATA:
             if (exec_rreq_getdata(dg, ndata) == -1)
                 return -1;
-            break;
-        case RREQ_SYNC:
+            break;*/
+        /*case RREQ_SYNC:
             if (exec_rreq_sync(dg, ndata) == -1)
                 return -1;
-            break;
-        case RREQ_DESTROY:
+            break;*/
+        /*case RREQ_DESTROY:
             if (exec_rreq_destroy(dg, ndata) == -1)
                 return -1;
-            break;
+            break;*/
         case PING:
             break;
         case ACK:
@@ -97,54 +97,20 @@ int exec_rreq_read (const dgram *dg, nodedata *ndata)
         return 1;
     }
 
-    int tmpfd;
-    if ((tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644)) == -1) {
-        perror("open");
-        return -1;
-    }
-    if (close(tmpfd) == -1) {
-        perror("close");
-        return -1;
-    }
-
-    FILE *datafile = fopen(ndata->datafile, "r");
-    if (datafile == NULL) {
-        perror("fopen");
-        return -1;
-    }
-
-    ssize_t bytes;
-    char *line = malloc(DATAFILE_LINE_MAX);
-    if (line == NULL) {
-        perror("malloc");
-        return -1;
-    }
     char data[DG_DATA_MAX] = "";
     size_t len;
-    size_t n = DATAFILE_LINE_MAX;
-
-    errno = 0;
-    while ((bytes = getline(&line, &n, datafile)) != -1) {
-        len = strnlen(data, DG_DATA_MAX);
-        if (line[bytes - 1] == '\n')
-            line[bytes - 1] = '\0';
-        strncat(data, line, DG_DATA_MAX - len -1);
-        if (len >= DG_DATA_MAX)
-            break;
-        strncat(data, ",", DG_DATA_MAX - len);
-    }
-    if (errno != 0) {
-        perror("getline");
-        return -1;
+    size_t i;
+    for (i = 0; i < ndata->nb_infos; i++)
+    {
+      len = strnlen(data, DG_DATA_MAX);
+      strncat(data, ndata->datas[i].login, DG_DATA_MAX - len -1);
+      strncat(data, ndata->datas[i].value, DG_DATA_MAX - len -1);
+      if (len >= DG_DATA_MAX)
+          break;
+      strncat(data, ",", DG_DATA_MAX - len);
     }
 
     data[strnlen(data, DG_DATA_MAX) - 1] = '\0';
-    free(line);
-    if (fclose(datafile) == EOF) {
-        perror("fclose");
-        return -1;
-    }
-
     char buf[DG_DATA_MAX];
     int val = snprintf(buf, DG_DATA_MAX, "%s:%s", username, data);
     if (val >= DG_DATA_MAX) {
@@ -174,70 +140,23 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
         return 1;
     }
 
-    int tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644);
-    if (tmpfd == -1) {
-        perror("open");
-        return -1;
-    }
-    if (close(tmpfd) == -1) {
-        perror("close");
-        return -1;
-    }
-
-    // si elle existe, supprimer la ligne contenant le user et l'ancienne valeur qui lui est associée
-    if (delete_user_file_line(username, ndata) == -1)
-        return -1;
-
-    // si le dernier caractere est un \n, le supprimer ! sinon doublon de \n et ligne vide inutile
-
-    // ajouter la nouvelle ligne
-    FILE *datafile = fopen(ndata->datafile, "a+");
-    if (datafile == NULL) {
-        perror("fopen");
-        return -1;
+    size_t i; int found = -1;
+    for (i = 0; i < ndata->nb_infos; i++)
+    {
+      if (strncmp(username, ndata->datas[i].login, strlen(username)) == 0)
+      {
+        found = i;
+        break;
+      }
     }
 
-    errno = 0;
-    int c;
-    if (((c = fgetc(datafile)) == EOF) && (errno != 0)) {
-        perror("fgetc");
-        return -1;
+    if (found != -1) {
+      strncpy(ndata->datas[found].value, tmp, strlen(tmp));
     }
-
-    if (c != EOF) {
-        if (fseek(datafile, -1, SEEK_END) == -1) {
-            perror("fseek");
-            return -1;
-        }
-
-        // lire le dernier caractere du fichier
-        switch (fgetc(datafile)) {
-            case -1:
-                perror("fgetc");
-                return -1;
-            case '\n':
-                break;
-            case '\r':
-                break;
-            default:
-                // add new line
-                if (fputc('\n', datafile) == EOF) {
-                    perror("fputc");
-                    return -1;
-                }
-                break;
-        }
-    }
-
-    // ajout de la nouvelle ligne
-    if (fputs(dg->data, datafile) == EOF) {
-        perror("fputs");
-        return -1;
-    }
-
-    if (fclose(datafile) == EOF) {
-        perror("fclose");
-        return -1;
+    else {
+      strncpy(ndata->datas[ndata->nb_infos].login, username, strlen(username));
+      strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
+      ndata->nb_infos++;
     }
 
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_WRITE, SUCCESS, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
@@ -249,19 +168,15 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
 int exec_rreq_delete (const dgram *dg, nodedata *ndata)
 {
     const char *username = dg->data;
-    int tmpfd = open(ndata->datafile, O_RDONLY | O_CREAT, 0644);
-    if (tmpfd == -1) {
-        perror("open");
-        return -1;
+    size_t i;
+    for (i = 0; i < ndata->nb_infos; i++)
+    {
+      if (strncmp(ndata->datas[i].login, username, strlen(username)) == 0)
+      {
+        memmove(&ndata->datas[i], &ndata->datas[i + 1], sizeof(user_info) * (ndata->nb_infos - i - 1));
+        ndata->nb_infos--;
+      }
     }
-    if (close(tmpfd) == -1) {
-        perror("close");
-        return -1;
-    }
-
-    // si elle existe, supprimer la ligne contenant le user et l'ancienne valeur qui lui est associée
-    if (delete_user_file_line(username, ndata) == -1)
-        return -1;
 
     char buf[DG_DATA_MAX];
     int val = snprintf(buf, DG_DATA_MAX, "%s", username);
@@ -280,7 +195,7 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
     return 0;
 }
 
-int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
+/*int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
 {
     // dg->data = <RELAIS_NODE_ID>
     FILE *datafile = fopen(ndata->datafile, "r");
@@ -327,9 +242,9 @@ int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
         return -1;
 
     return 0;
-}
+}*/
 
-int exec_rreq_sync (const dgram *dg, nodedata *ndata)
+/*int exec_rreq_sync (const dgram *dg, nodedata *ndata)
 {
     FILE *datafile = fopen(ndata->datafile, "w");
     if (datafile == NULL) {
@@ -351,7 +266,7 @@ int exec_rreq_sync (const dgram *dg, nodedata *ndata)
         return -1;
 
     return 0;
-}
+}*/
 
 int exec_rreq_destroy (const dgram *dg, nodedata *ndata)
 {
@@ -384,74 +299,4 @@ bool is_relais (const uint32_t addr, const in_port_t port, const nodedata *ndata
         return true;
 
     return false;
-}
-
-int delete_user_file_line (const char *username, const nodedata *ndata)
-{
-    char tmp_w_filename[N];
-    sprintf(tmp_w_filename, "%s_tmp", ndata->datafile);
-
-    FILE *file_r = fopen(ndata->datafile, "r");
-    if (file_r == NULL) {
-        perror("fopen");
-        return -1;
-    }
-
-    FILE *file_w = fopen(tmp_w_filename, "w");
-    if (file_w == NULL) {
-        perror("fopen");
-        return -1;
-    }
-
-    char *line = malloc(DATAFILE_LINE_MAX);
-    if (line == NULL) {
-        perror("malloc");
-        return -1;
-    }
-
-    char *usr, *tmp, line_cpy[DATAFILE_LINE_MAX];
-    size_t username_len = strnlen(username, FIELD_MAX), n = DATAFILE_LINE_MAX;
-    ssize_t bytes;
-    errno = 0;
-    while ((bytes = getline(&line, &n, file_r)) != -1) {
-        tmp = NULL;
-        strncpy(line_cpy, line, n);
-        usr = strtok_r(line_cpy, ":", &tmp);
-        if (usr == NULL) {
-            perror("strtok_r");
-            return -1;
-        }
-        if (strncmp(usr, username, username_len + 1) == 0) {
-            continue;
-        }
-
-        // add this line
-        if (fputs(line, file_w) == EOF) {
-            perror("fputs");
-            return -1;
-        }
-    }
-
-    if (errno != 0) {
-        perror("getline");
-        return -1;
-    }
-
-    free(line);
-    if (fclose(file_r) == EOF) {
-        perror("fclose");
-        return -1;
-    }
-
-    if (fclose(file_w) == EOF) {
-        perror("fclose");
-        return -1;
-    }
-
-    if (rename(tmp_w_filename, ndata->datafile) == -1) {
-        perror("rename");
-        return -1;
-    }
-
-    return 0;
 }

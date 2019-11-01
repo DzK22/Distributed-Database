@@ -10,9 +10,15 @@
 #define DATAFILE_LINE_MAX 64
 
 typedef struct {
+  char login[N];
+  char value[N];
+} user_info;
+
+typedef struct {
     int sck;
     const char *field;
-    const char *datafile;
+    user_info *datas;
+    size_t nb_infos;
     struct sockaddr_in relais_saddr;
     dgram *dgsent;
     dgram *dgreceived;
@@ -33,6 +39,5 @@ int exec_rreq_destroy (const dgram *dg, nodedata *ndata);
 
 int send_meet (nodedata *ndata);
 bool is_relais (const uint32_t addr, const in_port_t port, const nodedata *ndata);
-int delete_user_file_line (const char *username, const nodedata *ndata);
 
 #endif

@@ -2,14 +2,13 @@
 
 int main (int argc, char **argv)
 {
-    if (argc != 5) {
+    if (argc != 4) {
         fprintf(stderr, "Utilisation: %s <relais_addr> <relais_port> <champ stocké> <fichier données>\n", argv[0]);
         return EXIT_FAILURE;
     }
     const char *relais_addr = argv[1];
     const char *relais_port = argv[2];
     const char *field = argv[3];
-    const char *datafile = argv[4];
 
     int sck = sck_create();
     if (sck == -1)
@@ -21,7 +20,13 @@ int main (int argc, char **argv)
     nodedata ndata;
     ndata.sck = sck;
     ndata.field = field;
-    ndata.datafile = datafile;
+    ndata.nb_infos = 0;
+    ndata.datas = malloc(sizeof(user_info) * 1024);
+    if (ndata.datas == NULL)
+    {
+      perror("malloc error");
+      return EXIT_FAILURE;
+    }
     ndata.dgsent = NULL;
     ndata.dgreceived = NULL;
     ndata.id_counter = 0;
