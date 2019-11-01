@@ -45,6 +45,7 @@
 #define RRES_READ 31
 #define RRES_WRITE 32
 #define RRES_DELETE 33
+#define RRES_LOGOUT 35
 // RNRES
 #define RNRES_MEET 34
 // PING PONG

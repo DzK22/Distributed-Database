@@ -493,6 +493,8 @@ char * dgram_request_str (const dgram *dg)
             return "RRES_DELETE";
         case RNRES_MEET:
             return "RNRES_MEET";
+        case RRES_LOGOUT:
+            return "RRES_LOGOUT";
         default:
             return "UNDEFINED";
     }

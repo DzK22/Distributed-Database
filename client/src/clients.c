@@ -61,7 +61,12 @@ int read_stdin (clientdata *cdata)
         request = CREQ_DELETE;
         instr_len = 10;
         arg = false;
-    } else {
+    } else if (strncmp(request_str, "bye", 4) == 0) {
+        request = CREQ_LOGOUT;
+        instr_len = 4;
+        arg = false;
+    }
+    else {
         dgram tmp;
         tmp.status = ERR_SYNTAX;
         dgram_print_status(&tmp);
@@ -103,6 +108,13 @@ int exec_dg (const dgram *dg, void *data)
             break;
         case RRES_DELETE:
             dgram_print_status(dg);
+            break;
+        case RRES_LOGOUT:
+            dgram_print_status(dg);
+            if (dg->status == SUCCESS) {
+              printf("DECONNEXION\n");
+              return -1;
+            }
             break;
         case ACK:
             break;

@@ -290,8 +290,25 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
 
 int exec_creq_logout (const dgram *dg, relaisdata *rdata)
 {
-    (void) dg, (void) rdata;
+    user *usr = get_user_from_dg(dg, rdata);
+    if (usr == NULL) {
+        // not auth !
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, ERR_NOTAUTH, dg->addr, dg->port, 0, NULL) == -1)
+            return -1;
+        return 1;
+    }
 
+    size_t i;
+    for (i = 0; i < rdata->mugi->nb_hosts; i++)
+    {
+      if (strncmp(usr->login, rdata->mugi->hosts[i].login, strlen(usr->login)) == 0) {
+          memmove(&rdata->mugi->hosts[i], &rdata->mugi->hosts[i + 1], sizeof(auth_user) * (rdata->mugi->nb_hosts - i - 1));
+          rdata->mugi->nb_hosts--;
+          if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_LOGOUT, SUCCESS, rdata->mugi->hosts[i].saddr.sin_addr.s_addr, rdata->mugi->hosts[i].saddr.sin_port, 0, NULL) == -1) {
+              return -1;
+          }
+      }
+    }
     return 0;
 }
 
