@@ -10,13 +10,23 @@ int sck_can_read (const int sck, void *data)
 {
     (void) sck;
     relaisdata *rdata = ((relaisdata *) data);
-    if (sem_wait(&rdata->sem) == -1) {
+    if (sem_wait(&rdata->rsem) == -1) {
         perror("sem_wait");
         return -1;
     }
+    if (sem_wait(&rdata->gsem) == -1) {
+        perror("sem_wait");
+        return -1;
+    }
+
     if (dgram_process_raw(rdata->sck, &rdata->dgsent, &rdata->dgreceived, rdata, exec_dg) == -1)
         return -1;
-    if (sem_post(&rdata->sem) == -1) {
+
+    if (sem_post(&rdata->gsem) == -1) {
+        perror("sem_post");
+        return -1;
+    }
+    if (sem_post(&rdata->rsem) == -1) {
         perror("sem_post");
         return -1;
     }
@@ -701,7 +711,7 @@ void * rthread_check_loop (void *data)
     while (1) {
         sleep(1);
         now = time(NULL);
-        if (sem_wait(&rdata->sem) == -1) {
+        if (sem_wait(&rdata->rsem) == -1) {
             perror("sem_wait");
             return NULL;
         }
@@ -740,7 +750,7 @@ void * rthread_check_loop (void *data)
             }
         }
 
-        if (sem_post(&rdata->sem) == -1) {
+        if (sem_post(&rdata->rsem) == -1) {
             perror("sem_post");
             return NULL;
         }

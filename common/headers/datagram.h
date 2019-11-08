@@ -6,8 +6,8 @@
 #define DG_DATA_MAX 65536 // octets
 #define DG_HEADER_SIZE 10
 #define DG_FIRST_2OCTET 0x0000 // 2 octets à 0
-#define DG_DELETE_TIMEOUT 400 // si dgram reçu non complet apres 400ms, le supprimer
-#define DG_RESEND_TIMEOUT 500 // si dgram envoyé non acquis apres 600ms, le réenvoyer
+#define DG_DELETE_TIMEOUT 800 // sup paquet si non ready après 800ms
+#define DG_RESEND_TIMEOUT 300 // réenvoyer paquet si non ACK après 300ms
 
 // requetes et réponses
 // CREQ = Client -> Relais
@@ -87,6 +87,7 @@ typedef struct {
     int sck;
     dgram **dgsent;
     dgram **dgreceived;
+    sem_t *gsem;
 } thread_targ;
 
 int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, dgram *curdg, const struct sockaddr_in *saddr);

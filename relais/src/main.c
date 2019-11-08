@@ -30,7 +30,11 @@ int main (int argc, char **argv)
     rdata.id_counter = 0;
     rdata.mugi = mugi;
 
-    if (sem_init(&rdata.sem, 0, 1) == -1) {
+    if (sem_init(&rdata.rsem, 0, 1) == -1) {
+        perror("sem_init");
+        return EXIT_FAILURE;
+    }
+    if (sem_init(&rdata.gsem, 0, 1) == -1) {
         perror("sem_init");
         return EXIT_FAILURE;
     }
@@ -41,6 +45,7 @@ int main (int argc, char **argv)
     targ.sck = rdata.sck;
     targ.dgsent = &rdata.dgsent;
     targ.dgreceived = &rdata.dgreceived;
+    targ.gsem = &rdata.gsem;
     if ((errno = pthread_create(&th, NULL, thread_timeout_loop, &targ)) != 0) {
         perror("pthread_create");
         return EXIT_FAILURE;

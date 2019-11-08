@@ -5,6 +5,7 @@
  */
 
 #include "../headers/clients.h"
+extern bool dg_debug_active;
 
 int main (int argc, char **argv)
 {
@@ -26,6 +27,8 @@ int main (int argc, char **argv)
     if (sck_create_saddr(&relais_saddr, relais_ip, relais_port) == -1)
         return EXIT_FAILURE;
 
+    dg_debug_active = false;
+
     clientdata cdata;
     cdata.sck = sck;
     cdata.relais_saddr = &relais_saddr;
@@ -34,12 +37,17 @@ int main (int argc, char **argv)
     cdata.id_counter = 0;
     cdata.is_auth = false;
 
+    if (sem_init(&cdata.gsem, 0, 1) == -1) {
+        return EXIT_FAILURE;
+    }
+
     // start thread
     pthread_t th;
     thread_targ targ;
     targ.sck = cdata.sck;
     targ.dgsent = &cdata.dgsent;
     targ.dgreceived = &cdata.dgreceived;
+    targ.gsem = &cdata.gsem;
     if ((errno = pthread_create(&th, NULL, thread_timeout_loop, &targ)) != 0) {
         perror("pthread_create");
         return EXIT_FAILURE;

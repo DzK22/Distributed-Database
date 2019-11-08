@@ -4,8 +4,18 @@ int sck_can_read (const int sck, void *data)
 {
     (void) sck;
     nodedata *ndata = ((nodedata *) data);
+    if (sem_wait(&ndata->gsem) == -1) {
+        perror("sem_wait");
+        return -1;
+    }
+
     if (dgram_process_raw(ndata->sck, &ndata->dgsent, &ndata->dgreceived, ndata, exec_dg) == -1)
         return -1;
+
+    if (sem_post(&ndata->gsem) == -1) {
+        perror("sem_post");
+        return -1;
+    }
 
     return 0;
 }
@@ -46,10 +56,6 @@ int exec_dg (const dgram *dg, void *data)
             if (exec_rreq_sync(dg, ndata) == -1)
                 return -1;
             break;
-        /*case RREQ_DESTROY:
-            if (exec_rreq_destroy(dg, ndata) == -1)
-                return -1;
-            break;*/
         case PING:
             break;
         case ACK:
@@ -102,13 +108,13 @@ int exec_rreq_read (const dgram *dg, nodedata *ndata)
     size_t i;
     for (i = 0; i < ndata->nb_infos; i++)
     {
-      len = strnlen(data, DG_DATA_MAX);
-      strncat(data, ndata->datas[i].login, DG_DATA_MAX - len -1);
-      strcat(data, ":");
-      strncat(data, ndata->datas[i].value, DG_DATA_MAX - len -1);
-      if (len >= DG_DATA_MAX)
-          break;
-      strncat(data, ",", DG_DATA_MAX - len);
+        len = strnlen(data, DG_DATA_MAX);
+        strncat(data, ndata->datas[i].login, DG_DATA_MAX - len -1);
+        strcat(data, ":");
+        strncat(data, ndata->datas[i].value, DG_DATA_MAX - len -1);
+        if (len >= DG_DATA_MAX)
+            break;
+        strncat(data, ",", DG_DATA_MAX - len);
     }
 
     data[strnlen(data, DG_DATA_MAX) - 1] = '\0';
@@ -144,20 +150,20 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
     size_t i; int found = -1;
     for (i = 0; i < ndata->nb_infos; i++)
     {
-      if (strncmp(username, ndata->datas[i].login, strlen(username)) == 0)
-      {
-        found = i;
-        break;
-      }
+        if (strncmp(username, ndata->datas[i].login, strlen(username)) == 0)
+        {
+            found = i;
+            break;
+        }
     }
 
     if (found != -1) {
-      strncpy(ndata->datas[found].value, tmp, strlen(tmp));
+        strncpy(ndata->datas[found].value, tmp, strlen(tmp));
     }
     else {
-      strncpy(ndata->datas[ndata->nb_infos].login, username, strlen(username));
-      strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
-      ndata->nb_infos++;
+        strncpy(ndata->datas[ndata->nb_infos].login, username, strlen(username));
+        strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
+        ndata->nb_infos++;
     }
 
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_WRITE, SUCCESS, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
@@ -172,11 +178,11 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
     size_t i;
     for (i = 0; i < ndata->nb_infos; i++)
     {
-      if (strncmp(ndata->datas[i].login, username, strlen(username)) == 0)
-      {
-        memmove(&ndata->datas[i], &ndata->datas[i + 1], sizeof(user_info) * (ndata->nb_infos - i - 1));
-        ndata->nb_infos--;
-      }
+        if (strncmp(ndata->datas[i].login, username, strlen(username)) == 0)
+        {
+            memmove(&ndata->datas[i], &ndata->datas[i + 1], sizeof(user_info) * (ndata->nb_infos - i - 1));
+            ndata->nb_infos--;
+        }
     }
 
     char buf[DG_DATA_MAX];
@@ -205,12 +211,11 @@ int exec_rreq_getdata (const dgram *dg, nodedata *ndata)
     sprintf(buf, "%s:", dg->data);
 
     size_t i;
-    for (i = 0; i < ndata->nb_infos; i++)
-    {
-      strcat(buf, ndata->datas[i].login);
-      strcat(buf, ",");
-      strcat(buf, ndata->datas[i].value);
-      strcat(buf, ";");
+    for (i = 0; i < ndata->nb_infos; i++) {
+        strcat(buf, ndata->datas[i].login);
+        strcat(buf, ",");
+        strcat(buf, ndata->datas[i].value);
+        strcat(buf, ";");
     }
     printf("buf = %s\n", buf);
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_GETDATA, SUCCESS, dg->addr, dg->port, strnlen(buf, DG_DATA_MAX), buf) == -1)
@@ -225,21 +230,14 @@ int exec_rreq_sync (const dgram *dg, nodedata *ndata)
     char *rest = dg->data;
     while ((tmp = (strtok_r(rest, ";", &rest))) != NULL)
     {
-      tmp2 = strtok_r(tmp, ",", &tmp);
-      strncpy(ndata->datas[ndata->nb_infos].login, tmp2, strlen(tmp2));
-      strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
-      ndata->nb_infos++;
+        tmp2 = strtok_r(tmp, ",", &tmp);
+        strncpy(ndata->datas[ndata->nb_infos].login, tmp2, strlen(tmp2));
+        strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
+        ndata->nb_infos++;
     }
 
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_SYNC, SUCCESS, dg->addr, dg->port, 0, NULL) == -1)
         return -1;
-
-    return 0;
-}
-
-int exec_rreq_destroy (const dgram *dg, nodedata *ndata)
-{
-    (void) dg, (void) ndata;
 
     return 0;
 }

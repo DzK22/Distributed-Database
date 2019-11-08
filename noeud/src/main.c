@@ -21,11 +21,11 @@ int main (int argc, char **argv)
     ndata.sck = sck;
     ndata.field = field;
     ndata.nb_infos = 0;
-    ndata.datas = malloc(sizeof(user_info) * 1024);
+    ndata.datas = malloc(sizeof(user_info) * N);
     if (ndata.datas == NULL)
     {
-      perror("malloc error");
-      return EXIT_FAILURE;
+        perror("malloc error");
+        return EXIT_FAILURE;
     }
     ndata.dgsent = NULL;
     ndata.dgreceived = NULL;
@@ -35,12 +35,18 @@ int main (int argc, char **argv)
     if (sck_create_saddr(&ndata.relais_saddr, relais_addr, relais_port) == -1)
         return EXIT_FAILURE;
 
+    if (sem_init(&ndata.gsem, 0, 1) == -1) {
+        perror("sem_init");
+        return EXIT_FAILURE;
+    }
+
     // start thread
     pthread_t th;
     thread_targ targ;
     targ.sck = ndata.sck;
     targ.dgsent = &ndata.dgsent;
     targ.dgreceived = &ndata.dgreceived;
+    targ.gsem = &ndata.gsem;
     if ((errno = pthread_create(&th, NULL, thread_timeout_loop, &targ)) != 0) {
         perror("pthread_create");
         return EXIT_FAILURE;

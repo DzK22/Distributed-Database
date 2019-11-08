@@ -9,12 +9,22 @@
 int fd_can_read (int fd, void *data)
 {
     clientdata *cdata = ((clientdata *) data);
+    if (sem_wait(&cdata->gsem) == -1) {
+        perror("sem_wait");
+        return -1;
+    }
+
     if (fd == 0) { // stdin
         if (read_stdin(cdata) == -1)
             return -1;
     } else if (fd == cdata->sck) { // sck
         if (dgram_process_raw(cdata->sck, &cdata->dgsent, &cdata->dgreceived, cdata, exec_dg) == -1)
             return -1;
+    }
+
+    if (sem_post(&cdata->gsem) == -1) {
+        perror("sem_post");
+        return -1;
     }
 
     return 0;

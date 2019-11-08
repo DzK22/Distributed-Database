@@ -1,5 +1,7 @@
 #include "../headers/datagram.h"
 
+bool dg_debug_active = true;
+
 int dgram_print_status (const dgram *dg)
 {
     if (dg->status == NORMAL) // error
@@ -135,10 +137,9 @@ int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, dgram 
         gettimeofday(&new_dg->creation_time, NULL);
         *curdg = *new_dg;
 
-        if (new_dg->request != ACK) { // ne pas ajouter les ACK dans la liste
-            new_dg->next = *dglist;
-            *dglist = new_dg;
-        } else
+        if (new_dg->request != ACK) // ne pas ajouter les ACK dans la liste
+            *dglist = dgram_add(*dglist, new_dg);
+        else
             new_dg->next = NULL;
     }
 
@@ -151,17 +152,13 @@ bool dgram_del_from_id (dgram **dglist, const uint16_t id) // renvoie true si un
     while (dg != NULL) {
         if (dg->id == id) {
             // del this dgram
-            dgram *new_first;
             if (old == NULL)
-                new_first = NULL;
-            else {
-                new_first = old;
+                *dglist = dg->next;
+            else
                 old->next = dg->next;
-            }
             if (dg->data != NULL) // data peut être nul !
                 free(dg->data);
             free(dg);
-            *dglist = new_first;
             return true;
         }
         old = dg;
@@ -191,26 +188,21 @@ unsigned time_ms_diff (struct timeval *tv1, struct timeval *tv2) // le plus réc
 
 int dgram_check_timeout_delete (dgram **dgsent)
 {
-    dgram *tmp, *dg = *dgsent, *old = NULL;
+    dgram *dg = *dgsent;
     struct timeval now;
+    uint8_t tmp_id;
     gettimeofday(&now, NULL);
 
     while (dg != NULL) {
         if (time_ms_diff(&now, &dg->creation_time) > DG_DELETE_TIMEOUT) {
             // supprimer ce dgram
-            if (old == NULL)
-                *dgsent = dg->next;
-            else
-                old->next = dg->next;
-            tmp = dg;
+            tmp_id = dg->id;
             dg = dg->next;
-            if (tmp->data != NULL) // data peut etre nul !
-                free(tmp->data);
-            free(tmp);
+            dgram_del_from_id(dgsent, dg->id);
+            printf("DELETE dg.id = %d\n", tmp_id);
             continue;
         }
 
-        old = dg;
         dg = dg->next;
     }
 
@@ -225,10 +217,11 @@ int dgram_check_timeout_resend (const int sock, dgram **dgsent)
     gettimeofday(&now, NULL);
 
     while (dg != NULL) {
-        unsigned t;
-        if ((t = time_ms_diff(&now, &dg->creation_time)) > DG_RESEND_TIMEOUT) {
-            if (dgram_send(sock, dg, dgsent) == -1)
+        if (time_ms_diff(&now, &dg->creation_time) > DG_RESEND_TIMEOUT) {
+            if (dgram_send(sock, dg, NULL) == -1)
                 return -1;
+            dg->creation_time = now;
+            printf("RESEND dg.id = %d\n", dg->id);
         }
         dg = dg->next;
     }
@@ -310,17 +303,17 @@ uint16_t dgram_checksum (const dgram *dg)
 
 dgram * dgram_add (dgram *dglist, dgram *dg) // /!/ dg doit avoir été alloué avec malloc
 {
-    if (dglist == NULL)
-        return dg;
     dg->next = dglist;
     return dg;
 }
 
 int dgram_send (const int sck, dgram *dg, dgram **dg_sent)
 {
-    dgram_debug(dg, false);
+    if (dg_debug_active)
+        dgram_debug(dg, false);
 
-    *dg_sent = dgram_add(*dg_sent, dg);
+    if (dg_sent != NULL)
+        *dg_sent = dgram_add(*dg_sent, dg);
     struct sockaddr_in saddr;
     saddr.sin_family = AF_INET;
     saddr.sin_addr.s_addr = dg->addr;
@@ -343,16 +336,25 @@ int dgram_send (const int sck, dgram *dg, dgram **dg_sent)
 void * thread_timeout_loop (void *arg) // arg = thread_targ
 {
     thread_targ *targ = arg;
-    return NULL; // a sup quand pret a test
     while (1) {
-        if (usleep(100) == -1) {
+        if (usleep(100000) == -1) {
             perror("usleep");
             return NULL;
         }
+        if (sem_wait(targ->gsem) == -1) {
+            perror("sem_wait");
+            return NULL;
+        }
+
         if (dgram_check_timeout_delete(targ->dgreceived) == -1)
             return NULL;
         if (dgram_check_timeout_resend(targ->sck, targ->dgsent) == -1)
             return NULL;
+
+        if (sem_post(targ->gsem) == -1) {
+            perror("sem_post");
+            return NULL;
+        }
     }
 
     return NULL;
@@ -416,7 +418,8 @@ int dgram_process_raw (const int sck, dgram **dgsent, dgram **dgreceived, void *
     if (dgram_add_from_raw(dgreceived, buf, bytes, &dg, &saddr) == -1)
         return -1;
 
-    dgram_debug(&dg, true);
+    if (dg_debug_active)
+        dgram_debug(&dg, true);
 
     if (dgram_is_ready(&dg)) {
         if (!dgram_verify_checksum(&dg)) { // données erronées => jeter paquet
@@ -426,8 +429,12 @@ int dgram_process_raw (const int sck, dgram **dgsent, dgram **dgreceived, void *
 
         // SEND ACK
         if (dg.request != ACK) {
-            if (dgram_create_send(sck, dgsent, NULL, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
+            if (dgram_create_send(sck, NULL, NULL, dg.id, ACK, NORMAL, dg.addr, dg.port, 0, NULL) == -1)
                 return -1;
+        } else {
+            // PAQUET = ACK
+            // ==> supprimer la paquet correspondant dans dgsent
+            dgram_del_from_id(dgsent, dg.id);
         }
 
         if (callback(&dg, cb_data) == -1)

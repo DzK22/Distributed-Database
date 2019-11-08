@@ -17,6 +17,7 @@ typedef struct clientdata_s {
     dgram *dgreceived;
     uint16_t id_counter;
     bool is_auth;
+    sem_t gsem;
 } clientdata;
 
 int fd_can_read (int fd, void *data);

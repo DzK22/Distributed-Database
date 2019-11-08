@@ -11,7 +11,7 @@
 #define MAX_ATTR 32
 #define H 32
 #define PING_TIMEOUT 4
-#define DISCONNECT_TIMEOUT 6
+#define DISCONNECT_TIMEOUT 10
 
 #include "../../common/headers/datagram.h"
 #include "../../common/headers/sck.h"
@@ -61,7 +61,8 @@ typedef struct {
     dgram *dgreceived;
     unsigned id_counter;
     mugiwara *mugi;
-    sem_t sem;
+    sem_t rsem;
+    sem_t gsem;
 } relaisdata;
 
 

@@ -10,8 +10,8 @@
 #define DATAFILE_LINE_MAX 64
 
 typedef struct {
-  char login[N];
-  char value[N];
+    char login[FIELD_MAX];
+    char value[FIELD_MAX];
 } user_info;
 
 typedef struct {
@@ -24,6 +24,7 @@ typedef struct {
     dgram *dgreceived;
     unsigned id_counter;
     bool meet_success;
+    sem_t gsem;
 } nodedata;
 
 int sck_can_read (const int sck, void *data);
@@ -35,7 +36,6 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata);
 int exec_rreq_delete (const dgram *dg, nodedata *ndata);
 int exec_rreq_getdata (const dgram *dg, nodedata *ndata);
 int exec_rreq_sync (const dgram *dg, nodedata *ndata);
-int exec_rreq_destroy (const dgram *dg, nodedata *ndata);
 
 int send_meet (nodedata *ndata);
 bool is_relais (const uint32_t addr, const in_port_t port, const nodedata *ndata);

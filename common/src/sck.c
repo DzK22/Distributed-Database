@@ -86,6 +86,8 @@ int sck_wait_for_request (const int sck, const time_t delay, const bool use_stdi
         if (use_stdin)
             FD_SET(0, &fdset);
         FD_SET(sck, &fdset);
+        tv.tv_sec = delay;
+        tv.tv_usec = 0;
         sel = select(max, &fdset, NULL, NULL, &tv);
 
         switch (sel) {
