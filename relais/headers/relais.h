@@ -65,6 +65,8 @@ typedef struct {
     sem_t gsem;
 } relaisdata;
 
+char *crypter(char *to_enc);
+char *decrypter(char *to_dec);
 
 int sck_can_read (const int sck, void *data);
 int exec_dg (const dgram *dg, void *data);
