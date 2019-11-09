@@ -734,7 +734,7 @@ void * rthread_check_loop (void *data)
 
             } else if ((now - rdata->mugi->hosts[i].last_mess_time) > PING_TIMEOUT) {
                 // send PING mess
-                if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, PING, NORMAL, rdata->mugi->hosts[i].saddr.sin_addr.s_addr, rdata->mugi->hosts[i].saddr.sin_port, 0, NULL) == -1)
+                if (dgram_create_send(rdata->sck, NULL, NULL, rdata->id_counter ++, PING, NORMAL, rdata->mugi->hosts[i].saddr.sin_addr.s_addr, rdata->mugi->hosts[i].saddr.sin_port, 0, NULL) == -1)
                     return NULL;
             }
         }
@@ -751,7 +751,7 @@ void * rthread_check_loop (void *data)
 
             } else if ((now - rdata->mugi->nodes[i].last_mess_time) > PING_TIMEOUT) {
                 // send PING mess
-                if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, PING, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, 0, NULL) == -1)
+                if (dgram_create_send(rdata->sck, NULL, NULL, rdata->id_counter ++, PING, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, 0, NULL) == -1)
                     return NULL;
             }
         }
