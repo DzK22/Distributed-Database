@@ -15,6 +15,19 @@ int fd_can_read (int fd, void *data)
         perror("sem_wait");
         return -1;
     }
+    sigset_t mask;
+    if (sigemptyset(&mask) == -1) {
+        perror("sigemptyset");
+        return -1;
+    }
+    if (sigaddset(&mask, SIGINT) == -1) {
+        perror("sigaddset");
+        return -1;
+    }
+    if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+        perror("sigprocmask");
+        return -1;
+    }
 
     if (fd == 0) { // stdin
         if (read_stdin(cdata) == -1)
@@ -24,6 +37,14 @@ int fd_can_read (int fd, void *data)
             return -1;
     }
 
+    if (sigemptyset(&mask) == -1) {
+        perror("sigemptyset");
+        return -1;
+    }
+    if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+        perror("sigprocmask");
+        return -1;
+    }
     if (sem_post(&cdata->gsem) == -1) {
         perror("sem_post");
         return -1;
@@ -211,17 +232,10 @@ void signal_handler (int sig)
 {
     if (sig != SIGINT)
         return;
-    if (sem_wait(&cdata_global->gsem) == -1) {
-        perror("sem_wait");
-        return;
-    }
 
     printf("\n");
     dgram *dg;
     if (dgram_create_send(cdata_global->sck, &cdata_global->dgsent, &dg, cdata_global->id_counter ++, CREQ_LOGOUT, NORMAL, cdata_global->relais_saddr->sin_addr.s_addr, cdata_global->relais_saddr->sin_port, 0, NULL) == -1)
        return;
     dg->resend_timeout_cb = req_timeout;
-
-    if (sem_post(&cdata_global->gsem) == -1)
-        perror("sem_post");
 }

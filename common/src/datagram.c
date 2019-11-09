@@ -368,12 +368,33 @@ void * thread_timeout_loop (void *arg) // arg = thread_targ
             perror("sem_wait");
             break;
         }
+        sigset_t mask;
+        if (sigemptyset(&mask) == -1) {
+            perror("sigemptyset");
+            break;
+        }
+        if (sigaddset(&mask, SIGINT) == -1) {
+            perror("sigaddset");
+            break;
+        }
+        if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+            perror("sigprocmask");
+            break;
+        }
 
         if (dgram_check_timeout_delete(targ->dgreceived) == -1)
             break;
         if (dgram_check_timeout_resend(targ->sck, targ->dgsent) == -1)
             break;
 
+        if (sigemptyset(&mask) == -1) {
+            perror("sigemptyset");
+            break;
+        }
+        if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+            perror("sigprocmask");
+            break;
+        }
         if (sem_post(targ->gsem) == -1) {
             perror("sem_post");
             break;
