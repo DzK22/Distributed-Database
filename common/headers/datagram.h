@@ -82,6 +82,7 @@ typedef struct dgram_s {
     struct timeval creation_time;
     size_t resend_counter;
     bool (*resend_timeout_cb) (const struct dgram_s *dg);
+    void *resend_timeout_cb_cparam;
     struct dgram_s *next;
 } dgram;
 // dgram ready quand data_len == data_size !

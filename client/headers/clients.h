@@ -29,6 +29,6 @@ int send_auth (const char *login, const char *password, clientdata *cdata);
 int exec_dg (const dgram *dg, void *data);
 void print_read_res (const dgram *dg);
 void print_prompt (const clientdata *cdata);
-bool auth_timeout (const dgram *dg);
+bool req_timeout (const dgram *dg);
 
 #endif

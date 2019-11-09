@@ -92,8 +92,10 @@ int read_stdin (clientdata *cdata)
         return 1;
     }
 
-    if (dgram_create_send(cdata->sck, &cdata->dgsent, NULL, cdata->id_counter ++, request, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, arg ? data_len : 0, arg ? data + instr_len : NULL) == -1)
+    dgram *dg;
+    if (dgram_create_send(cdata->sck, &cdata->dgsent, &dg, cdata->id_counter ++, request, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, arg ? data_len : 0, arg ? data + instr_len : NULL) == -1)
        return -1;
+    dg->resend_timeout_cb = req_timeout;
 
     return 0;
 }
@@ -156,7 +158,7 @@ int send_auth (const char *login, const char *password, clientdata *cdata)
     dgram *dg;
     if (dgram_create_send(cdata->sck, &cdata->dgsent, &dg, cdata->id_counter ++, CREQ_AUTH, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, res, buf) == -1)
        return -1;
-    dg->resend_timeout_cb = auth_timeout;
+    dg->resend_timeout_cb = req_timeout;
 
     return 0;
 }
@@ -164,12 +166,12 @@ int send_auth (const char *login, const char *password, clientdata *cdata)
 void print_read_res (const dgram *dg)
 {
     bool empty = false;
-    if (strchr(dg->data, ':') == (dg->data + dg->data_len - 1))
+    if (strchr(dg->data, ':') == (dg->data + dg->data_len - 2))
         empty = true;
     if (empty)
-        printf("  \033[36m%s aucune donnée\033[0m\n", dg->data);
+        printf("  \033[36m%saucune donnée\033[0m\n", dg->data);
     else
-        printf("  \033[36m%s \033[0m\n", dg->data);
+        printf("  \033[36m%s\033[0m\n", dg->data);
 }
 
 void print_prompt (const clientdata *cdata)
@@ -179,7 +181,7 @@ void print_prompt (const clientdata *cdata)
         perror("fflush");
 }
 
-bool auth_timeout (const dgram *dg)
+bool req_timeout (const dgram *dg)
 {
     (void) dg;
     dgram tmpdg;

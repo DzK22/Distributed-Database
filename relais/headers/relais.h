@@ -91,4 +91,6 @@ auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata
 void update_last_mess_time_from_dg (const dgram *dg, relaisdata *rdata);
 void * rthread_check_loop (void *data);
 
+bool node_send_timeout (const dgram *dg);
+
 #endif

@@ -202,8 +202,11 @@ int exec_creq_read (const dgram *dg, relaisdata *rdata)
                 return -1;
             }
 
-            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_READ, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, val, buf) == -1)
+            dgram *new_dg;
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_READ, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, val, buf) == -1)
                 return -1;
+            new_dg->resend_timeout_cb = node_send_timeout;
+            new_dg->resend_timeout_cb_cparam = rdata;
             cpt ++;
             break;
         }
@@ -262,8 +265,11 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
             }
 
             // send to node
-            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_WRITE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, bytes, buf) == -1)
+            dgram *new_dg;
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_WRITE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, bytes, buf) == -1)
                 return -1;
+            new_dg->resend_timeout_cb = node_send_timeout;
+            new_dg->resend_timeout_cb_cparam = rdata;
             filled = true;
         }
 
@@ -293,8 +299,11 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
         if (!rdata->mugi->nodes[i].active)
             continue;
 
-        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
+        dgram *new_dg;
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
             return -1;
+        new_dg->resend_timeout_cb = node_send_timeout;
+        new_dg->resend_timeout_cb_cparam = rdata;
     }
 
     return 0;
@@ -406,7 +415,7 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
         return 1;
 
     char buf[DG_DATA_MAX];
-    int val = snprintf(buf, DG_DATA_MAX, "%s:%s", nd->field, dg->data + strnlen(username, N) + 1);
+    int val = snprintf(buf, DG_DATA_MAX, "%s: %s", nd->field, dg->data + strnlen(username, N) + 1);
     if (val >= DG_DATA_MAX) {
         fprintf(stderr, "snprintf truncate\n");
         return 1;
@@ -758,4 +767,38 @@ void * rthread_check_loop (void *data)
             return NULL;
         }
     }
+}
+
+bool node_send_timeout (const dgram *dg)
+{
+    relaisdata *rdata = dg->resend_timeout_cb_cparam;
+    char *login;
+    char *tmp;
+    char data_cpy[DG_DATA_MAX];
+    memcpy(data_cpy, dg->data, dg->data_len + 1); // + 1 car dg->data contient TOUJOURS un \0 a la fin
+    login = strtok_r(data_cpy, ":", &tmp);
+    if (!login)
+        return true; // le client est surement deco entre temps
+    auth_user *host = get_auth_user_from_login(login, rdata);
+
+    if (host) {
+        unsigned req;
+        switch (dg->request) {
+            case RREQ_READ:
+                req = RRES_READ;
+                break;
+            case RREQ_WRITE:
+                req = RRES_WRITE;
+                break;
+            case RREQ_DELETE:
+                req = RRES_DELETE;
+                break;
+            default:
+                return true;
+        }
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, req, ERR_NOREPLY, host->saddr.sin_addr.s_addr, host->saddr.sin_port, 0, NULL) == -1)
+            return false;
+    }
+
+    return true; // ne pas quitter (false => quitter)
 }

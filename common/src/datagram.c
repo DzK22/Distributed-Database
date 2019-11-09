@@ -141,6 +141,7 @@ int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, dgram 
         new_dg->port = saddr->sin_port;
         new_dg->resend_counter = 0;
         new_dg->resend_timeout_cb = NULL;
+        new_dg->resend_timeout_cb_cparam = NULL;
         gettimeofday(&new_dg->creation_time, NULL);
         *curdg = *new_dg;
 
@@ -297,6 +298,7 @@ int dgram_create (dgram **dgres, const uint16_t id, const uint8_t request, const
 
     dg->resend_counter = 0;
     dg->resend_timeout_cb = NULL;
+    dg->resend_timeout_cb_cparam = NULL;
     if (gettimeofday(&dg->creation_time, NULL) == -1) {
         perror("gettimeofday");
         return -1;
