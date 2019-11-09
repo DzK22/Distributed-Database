@@ -7,8 +7,8 @@
 #define DG_HEADER_SIZE 10
 #define DG_FIRST_2OCTET 0x0000 // 2 octets à 0
 #define DG_DELETE_TIMEOUT 800 // sup paquet si non ready après 800ms
-#define DG_RESEND_TIMEOUT 300 // réenvoyer paquet si non ACK après 300ms
-#define DG_RESEND_MAX 20
+#define DG_RESEND_TIMEOUT 400 // réenvoyer paquet si non ACK après 300ms
+#define DG_RESEND_MAX 10
 
 // requetes et réponses
 // CREQ = Client -> Relais

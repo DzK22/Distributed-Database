@@ -92,6 +92,8 @@ int sck_wait_for_request (const int sck, const time_t delay, const bool use_stdi
 
         switch (sel) {
             case -1:
+                if (errno == EINTR)
+                    continue;
                 perror("select error");
                 return -1;
             case 0:

@@ -20,6 +20,7 @@
 #include <math.h>
 #include <time.h>
 #include <semaphore.h>
+#include <signal.h>
 
 #define SCK_DATAGRAM_MAX 65546 // DG_DATA_MAX + DG_HEADER_SIZE de datagram.h
 

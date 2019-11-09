@@ -6,6 +6,8 @@
 
 #include "../headers/clients.h"
 
+extern clientdata *cdata_global;
+
 int fd_can_read (int fd, void *data)
 {
     clientdata *cdata = ((clientdata *) data);
@@ -54,6 +56,16 @@ int read_stdin (clientdata *cdata)
     if (request_str == NULL) {
         print_prompt(cdata);
         return 1;
+    }
+
+    if ((strncmp(request_str, "aide", 5) == 0) || (strncmp(request_str, "help", 5) == 0)) {
+        print_help();
+        print_prompt(cdata);
+        return 0;
+    } else if (strncmp(request_str, "clear", 6) == 0) {
+        printf("\e[1;1H\e[2J");
+        print_prompt(cdata);
+        return 0;
     }
 
     uint8_t request;
@@ -188,4 +200,28 @@ bool req_timeout (const dgram *dg)
     tmpdg.status = ERR_NOREPLY;
     dgram_print_status(&tmpdg);
     return false;
+}
+
+void print_help ()
+{
+    printf(" \033[35m[AIDE] Requêtes disponibles:\033[0m\n\tlire <champs1>[,...]\n\tecrire <champs1>:<valeur1>[,...]\n\tsupprimer\n\tclear\n\tbye\n");
+}
+
+void signal_handler (int sig)
+{
+    if (sig != SIGINT)
+        return;
+    if (sem_wait(&cdata_global->gsem) == -1) {
+        perror("sem_wait");
+        return;
+    }
+
+    printf("\n");
+    dgram *dg;
+    if (dgram_create_send(cdata_global->sck, &cdata_global->dgsent, &dg, cdata_global->id_counter ++, CREQ_LOGOUT, NORMAL, cdata_global->relais_saddr->sin_addr.s_addr, cdata_global->relais_saddr->sin_port, 0, NULL) == -1)
+       return;
+    dg->resend_timeout_cb = req_timeout;
+
+    if (sem_post(&cdata_global->gsem) == -1)
+        perror("sem_post");
 }

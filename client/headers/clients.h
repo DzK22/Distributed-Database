@@ -30,5 +30,7 @@ int exec_dg (const dgram *dg, void *data);
 void print_read_res (const dgram *dg);
 void print_prompt (const clientdata *cdata);
 bool req_timeout (const dgram *dg);
+void print_help ();
+void signal_handler (int sig);
 
 #endif

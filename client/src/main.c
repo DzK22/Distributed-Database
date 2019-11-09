@@ -6,6 +6,7 @@
 
 #include "../headers/clients.h"
 extern bool dg_debug_active;
+clientdata *cdata_global = NULL;
 
 int main (int argc, char **argv)
 {
@@ -41,6 +42,7 @@ int main (int argc, char **argv)
     if (sem_init(&cdata.gsem, 0, 1) == -1) {
         return EXIT_FAILURE;
     }
+    cdata_global = &cdata;
 
     // start thread
     pthread_t th;
@@ -57,6 +59,19 @@ int main (int argc, char **argv)
     printf(" > Tentative de connexion au serveur ...\n");
     if (send_auth(login, password, &cdata) == -1)
         return EXIT_FAILURE;
+
+    // signal handler
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sa.sa_flags = 0;
+    if (sigemptyset(&sa.sa_mask) == -1) {
+        perror("sigemptyset");
+        return EXIT_FAILURE;
+    }
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction");
+        return EXIT_FAILURE;
+    }
 
     sck_wait_for_request(sck, 300, true, &cdata, fd_can_read);
     return EXIT_FAILURE;
