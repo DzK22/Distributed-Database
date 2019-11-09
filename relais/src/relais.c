@@ -118,8 +118,10 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
         fpassword = rdata->mugi->users[i].mdp;
         if (fpassword == NULL)
             return -1;
-        login_ok = strncmp(flogin, login, strlen(flogin)) == 0;
-        password_ok = strncmp(fpassword, password, strlen(fpassword)) == 0;
+        size_t max_log = (strlen(flogin) >= strlen(login)) ? strlen(flogin) : strlen(login);
+        size_t max_pass = (strlen(fpassword) >= strlen(password)) ? strlen(fpassword) : strlen(password);
+        login_ok = strncmp(flogin, login, max_log) == 0;
+        password_ok = strncmp(fpassword, password, max_pass) == 0;
 
         if (login_ok && password_ok) {
             if (test_auth(login, rdata)) {
