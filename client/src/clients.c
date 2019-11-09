@@ -52,8 +52,8 @@ int read_stdin (clientdata *cdata)
     char *request_str, *tmp;
     request_str = strtok_r(data, " ", &tmp);
     if (request_str == NULL) {
-        perror("strtok_r");
-        return -1;
+        print_prompt(cdata);
+        return 1;
     }
 
     uint8_t request;
@@ -80,6 +80,7 @@ int read_stdin (clientdata *cdata)
         dgram tmp;
         tmp.status = ERR_SYNTAX;
         dgram_print_status(&tmp);
+        print_prompt(cdata);
         return 1;
     }
 
@@ -87,6 +88,7 @@ int read_stdin (clientdata *cdata)
         dgram tmp;
         tmp.status = ERR_SYNTAX;
         dgram_print_status(&tmp);
+        print_prompt(cdata);
         return 1;
     }
 
@@ -106,25 +108,27 @@ int exec_dg (const dgram *dg, void *data)
                 cdata->is_auth = true;
             else  // exec, print & quit
                 return -1;
+            print_prompt(cdata);
             break;
         case RRES_READ:
             if (dg->status == SUCCESS)
                 print_read_res(dg);
             else
                 dgram_print_status(dg);
+            print_prompt(cdata);
             break;
         case RRES_WRITE:
             dgram_print_status(dg);
+            print_prompt(cdata);
             break;
         case RRES_DELETE:
             dgram_print_status(dg);
+            print_prompt(cdata);
             break;
         case RRES_LOGOUT:
             dgram_print_status(dg);
-            if (dg->status == SUCCESS) {
-              printf("DECONNEXION\n");
-              return -1;
-            }
+            if (dg->status == SUCCESS)
+                return -1; // quitter le prog
             break;
         case ACK:
             break;
@@ -152,11 +156,34 @@ int send_auth (const char *login, const char *password, clientdata *cdata)
     dgram *dg;
     if (dgram_create_send(cdata->sck, &cdata->dgsent, &dg, cdata->id_counter ++, CREQ_AUTH, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, res, buf) == -1)
        return -1;
+    dg->resend_timeout_cb = auth_timeout;
 
     return 0;
 }
 
 void print_read_res (const dgram *dg)
 {
-   printf("\033[36m%s\033[0m\n", dg->data);
+    bool empty = false;
+    if (strchr(dg->data, ':') == (dg->data + dg->data_len - 1))
+        empty = true;
+    if (empty)
+        printf("  \033[36m%s aucune donnée\033[0m\n", dg->data);
+    else
+        printf("  \033[36m%s \033[0m\n", dg->data);
+}
+
+void print_prompt (const clientdata *cdata)
+{
+    printf("\033[33m[%s]\033[0m ", cdata->login);
+    if (fflush(stdout) == -1)
+        perror("fflush");
+}
+
+bool auth_timeout (const dgram *dg)
+{
+    (void) dg;
+    dgram tmpdg;
+    tmpdg.status = ERR_NOREPLY;
+    dgram_print_status(&tmpdg);
+    return false;
 }

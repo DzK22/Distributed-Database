@@ -36,6 +36,7 @@ int main (int argc, char **argv)
     cdata.dgreceived = NULL;
     cdata.id_counter = 0;
     cdata.is_auth = false;
+    strncpy(cdata.login, login, LOGIN_MAX);
 
     if (sem_init(&cdata.gsem, 0, 1) == -1) {
         return EXIT_FAILURE;

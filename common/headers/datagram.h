@@ -8,6 +8,7 @@
 #define DG_FIRST_2OCTET 0x0000 // 2 octets à 0
 #define DG_DELETE_TIMEOUT 800 // sup paquet si non ready après 800ms
 #define DG_RESEND_TIMEOUT 300 // réenvoyer paquet si non ACK après 300ms
+#define DG_RESEND_MAX 20
 
 // requetes et réponses
 // CREQ = Client -> Relais
@@ -79,6 +80,8 @@ typedef struct dgram_s {
     uint32_t addr; // format network
     in_port_t port; // format network
     struct timeval creation_time;
+    size_t resend_counter;
+    bool (*resend_timeout_cb) (const struct dgram_s *dg);
     struct dgram_s *next;
 } dgram;
 // dgram ready quand data_len == data_size !

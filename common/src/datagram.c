@@ -5,11 +5,11 @@ bool dg_debug_active = true;
 int dgram_print_status (const dgram *dg)
 {
     if (dg->status == NORMAL) // error
-        printf("\033[96m"); // cyan
+        printf("  \033[96m"); // cyan
     else if (dg->status == SUCCESS)
-        printf("\033[92m"); // green
+        printf("  \033[92m"); // green
     else // error
-        printf("\033[91m"); // red
+        printf("  \033[91m"); // red
 
     switch (dg->status) {
         case SUCCESS:
@@ -23,6 +23,11 @@ int dgram_print_status (const dgram *dg)
                 case RRES_DELETE:
                     printf("La suppression a réussie");
                     break;
+                case RRES_LOGOUT:
+                    printf("À bientot !");
+                    break;
+                default:
+                    printf("UNDEFINED");
             }
             break;
         case NORMAL:
@@ -134,6 +139,8 @@ int dgram_add_from_raw (dgram **dglist, void *raw, const size_t raw_size, dgram 
         new_dg->data[new_dg->data_size] = '\0';
         new_dg->addr = saddr->sin_addr.s_addr;
         new_dg->port = saddr->sin_port;
+        new_dg->resend_counter = 0;
+        new_dg->resend_timeout_cb = NULL;
         gettimeofday(&new_dg->creation_time, NULL);
         *curdg = *new_dg;
 
@@ -218,10 +225,22 @@ int dgram_check_timeout_resend (const int sock, dgram **dgsent)
 
     while (dg != NULL) {
         if (time_ms_diff(&now, &dg->creation_time) > DG_RESEND_TIMEOUT) {
-            if (dgram_send(sock, dg, NULL) == -1)
-                return -1;
-            dg->creation_time = now;
-            printf("RESEND dg.id = %d\n", dg->id);
+            if (dg->resend_counter < DG_RESEND_MAX) {
+                if (dgram_send(sock, dg, NULL) == -1)
+                    return -1;
+                dg->creation_time = now;
+                dg->resend_counter ++;
+            } else { // supprimer paquet
+                printf("RESEND MAX REACHED. DELETE THE PAQUET, id = %d\n", dg->id);
+                dgram *tmp_next = dg->next;
+                if (dg->resend_timeout_cb != NULL) {
+                    if (!dg->resend_timeout_cb(dg))
+                        return -1;
+                }
+                dgram_del_from_id(dgsent, dg->id);
+                dg = tmp_next;
+                continue;
+            }
         }
         dg = dg->next;
     }
@@ -276,6 +295,8 @@ int dgram_create (dgram **dgres, const uint16_t id, const uint8_t request, const
     dg->checksum = dgram_checksum(dg);
     dg->next = NULL;
 
+    dg->resend_counter = 0;
+    dg->resend_timeout_cb = NULL;
     if (gettimeofday(&dg->creation_time, NULL) == -1) {
         perror("gettimeofday");
         return -1;
@@ -339,25 +360,25 @@ void * thread_timeout_loop (void *arg) // arg = thread_targ
     while (1) {
         if (usleep(100000) == -1) {
             perror("usleep");
-            return NULL;
+            break;
         }
         if (sem_wait(targ->gsem) == -1) {
             perror("sem_wait");
-            return NULL;
+            break;
         }
 
         if (dgram_check_timeout_delete(targ->dgreceived) == -1)
-            return NULL;
+            break;
         if (dgram_check_timeout_resend(targ->sck, targ->dgsent) == -1)
-            return NULL;
+            break;
 
         if (sem_post(targ->gsem) == -1) {
             perror("sem_post");
-            return NULL;
+            break;
         }
     }
 
-    return NULL;
+    exit(EXIT_FAILURE);
 }
 
 bool dgram_verify_checksum (const dgram *dg)

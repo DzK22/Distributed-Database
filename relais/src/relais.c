@@ -116,7 +116,6 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
     for (i = 0; i < rdata->mugi->nb_users; i ++) {
         flogin = rdata->mugi->users[i].login;
         fpassword = rdata->mugi->users[i].mdp;
-        fpassword = decrypter(fpassword);
         if (fpassword == NULL)
             return -1;
         login_ok = strncmp(flogin, login, strlen(flogin)) == 0;
@@ -407,7 +406,7 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
         return 1;
 
     char buf[DG_DATA_MAX];
-    int val = snprintf(buf, DG_DATA_MAX, "%s=%s", nd->field, dg->data + strnlen(username, N) + 1);
+    int val = snprintf(buf, DG_DATA_MAX, "%s:%s", nd->field, dg->data + strnlen(username, N) + 1);
     if (val >= DG_DATA_MAX) {
         fprintf(stderr, "snprintf truncate\n");
         return 1;
@@ -653,7 +652,6 @@ mugiwara *init_mugiwara ()
         str = strtok_r(line, ":", &tmp); // login
         strncpy(mugi->users[i].login, str, MAX_ATTR);
         str = strtok_r(NULL, ":", &tmp); // psswd
-        str = crypter(str);
         if (str == NULL)
             return NULL;
         strncpy(mugi->users[i].mdp, str, MAX_ATTR);
@@ -761,36 +759,4 @@ void * rthread_check_loop (void *data)
             return NULL;
         }
     }
-}
-
-char *crypter(char *to_enc)
-{
-  char key = 'x';
-  char *encc = malloc(strlen(to_enc));
-  if (encc == NULL)
-  {
-    perror("malloc error on encryptage");
-    return NULL;
-  }
-  size_t i;
-  for (i = 0; i < strlen(to_enc); i++)
-    encc[i] += to_enc[i] ^ ((int)(key) + i) % 100;
-
-  return encc;
-}
-
-char *decrypter(char *to_dec)
-{
-  char key = 'x';
-  char *decc = malloc(strlen(to_dec));
-  if (decc == NULL)
-  {
-    perror("malloc error on decryptage");
-    return NULL;
-  }
-  size_t i;
-  for (i = 0; i < strlen(to_dec); i++)
-    decc[i] += to_dec[i] ^ ((int)key + i) % 100;
-
-  return decc;
 }
