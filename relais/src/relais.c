@@ -475,9 +475,8 @@ int exec_nres_getdata (const dgram *dg, relaisdata *rdata)
     if (dg->data_len >= (did + 2))
         node_data = node_id + strlen(node_id) + 1;
 
-    if (!node_id || !node_data) {
-        // que fait dans ce cas ? redemander au noeud ? (lui envoyer une erreur n'est surement pas utile
-        // peut etre demander a un autre noeud ?
+    if (!node_id) {
+        // ATTENTION: si node_data est null, NE PAS QUITTER, sinon le relais ne pourra pas mettre active = true lors de NRES_SYNC au noeud
         return 1;
     }
 
@@ -486,8 +485,8 @@ int exec_nres_getdata (const dgram *dg, relaisdata *rdata)
         if (rdata->mugi->nodes[i].id != did)
             continue;
 
-        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_SYNC, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strlen(node_data), node_data) == -1)
-            return -1;
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_SYNC, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, node_data ? strlen(node_data) : 0, node_data) == -1)
+        return -1;
 
         break;
     }
