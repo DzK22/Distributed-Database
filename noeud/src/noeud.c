@@ -257,6 +257,8 @@ int send_meet (nodedata *ndata)
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NREQ_MEET, NORMAL, ndata->relais_saddr.sin_addr.s_addr, ndata->relais_saddr.sin_port, bytes, buf) == -1)
         return -1;
 
+    ndata->dgsent->resend_timeout_cb = meet_timeout;
+
     return 0;
 }
 
@@ -265,5 +267,14 @@ bool is_relais (const uint32_t addr, const in_port_t port, const nodedata *ndata
     if ((addr == ndata->relais_saddr.sin_addr.s_addr) && (port == ndata->relais_saddr.sin_port))
         return true;
 
+    return false;
+}
+
+bool meet_timeout (const dgram *dg)
+{
+    (void) dg;
+    dgram tmpdg;
+    tmpdg.status = ERR_NOREPLY;
+    dgram_print_status(&tmpdg);
     return false;
 }

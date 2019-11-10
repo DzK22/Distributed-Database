@@ -39,5 +39,6 @@ int exec_rreq_sync (const dgram *dg, nodedata *ndata);
 
 int send_meet (nodedata *ndata);
 bool is_relais (const uint32_t addr, const in_port_t port, const nodedata *ndata);
+bool meet_timeout (const dgram *dg);
 
 #endif
