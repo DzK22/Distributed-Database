@@ -24,7 +24,7 @@ int fd_can_read (int fd, void *data)
         perror("sigaddset");
         return -1;
     }
-    if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+    if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1) {
         perror("sigprocmask");
         return -1;
     }
@@ -36,12 +36,7 @@ int fd_can_read (int fd, void *data)
         if (dgram_process_raw(cdata->sck, &cdata->dgsent, &cdata->dgreceived, cdata, exec_dg) == -1)
             return -1;
     }
-
-    if (sigemptyset(&mask) == -1) {
-        perror("sigemptyset");
-        return -1;
-    }
-    if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) {
+    if (sigprocmask(SIG_UNBLOCK, &mask, NULL) == -1) {
         perror("sigprocmask");
         return -1;
     }

@@ -116,8 +116,6 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
     for (i = 0; i < rdata->mugi->nb_users; i ++) {
         flogin = rdata->mugi->users[i].login;
         fpassword = rdata->mugi->users[i].mdp;
-        if (fpassword == NULL)
-            return -1;
         size_t max_log = (strlen(flogin) >= strlen(login)) ? strlen(flogin) : strlen(login);
         size_t max_pass = (strlen(fpassword) >= strlen(password)) ? strlen(fpassword) : strlen(password);
         login_ok = strncmp(flogin, login, max_log) == 0;
@@ -295,7 +293,7 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
             return -1;
         return 1;
     }
-
+    bool filled = false;
     size_t i;
     for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
         if (!rdata->mugi->nodes[i].active)
@@ -306,8 +304,15 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
             return -1;
         new_dg->resend_timeout_cb = node_send_timeout;
         new_dg->resend_timeout_cb_cparam = rdata;
+        filled = true;
     }
 
+    if (!filled) {
+      //aucun noeud trouvé
+      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
+          return -1;
+      return 1;
+    }
     return 0;
 }
 
@@ -753,8 +758,19 @@ void * rthread_check_loop (void *data)
                 // delete the node
                 printf("SUPPRESSION NODE - TIMEOUT REACHED\n");
                 if (i < (rdata->mugi->nb_nodes - 1))
-                    memmove(&rdata->mugi->nodes[i], &rdata->mugi->nodes[i + 1], sizeof(node) * (rdata->mugi->nb_nodes - i - 1));
-                rdata->mugi->nb_nodes --;
+                {
+                  size_t j;
+                  size_t taille = strlen(rdata->mugi->nodes[i].field);
+                  for (j = 0; j < rdata->mugi->nb_nodes; j++)
+                  {
+                    if ((strncmp(rdata->mugi->nodes[j].field, rdata->mugi->nodes[i].field, taille) == 0) && i != j) {
+                      rdata->mugi->nodes[j].active = true;
+                      break;
+                    }
+                  }
+                  memmove(&rdata->mugi->nodes[i], &rdata->mugi->nodes[i + 1], sizeof(node) * (rdata->mugi->nb_nodes - i - 1));
+                  rdata->mugi->nb_nodes --;
+                }
                 i --;
 
             } else if ((now - rdata->mugi->nodes[i].last_mess_time) > PING_TIMEOUT) {
