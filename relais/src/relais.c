@@ -758,19 +758,8 @@ void * rthread_check_loop (void *data)
                 // delete the node
                 printf("SUPPRESSION NODE - TIMEOUT REACHED\n");
                 if (i < (rdata->mugi->nb_nodes - 1))
-                {
-                  size_t j;
-                  size_t taille = strlen(rdata->mugi->nodes[i].field);
-                  for (j = 0; j < rdata->mugi->nb_nodes; j++)
-                  {
-                    if ((strncmp(rdata->mugi->nodes[j].field, rdata->mugi->nodes[i].field, taille) == 0) && i != j) {
-                      rdata->mugi->nodes[j].active = true;
-                      break;
-                    }
-                  }
-                  memmove(&rdata->mugi->nodes[i], &rdata->mugi->nodes[i + 1], sizeof(node) * (rdata->mugi->nb_nodes - i - 1));
-                  rdata->mugi->nb_nodes --;
-                }
+                    memmove(&rdata->mugi->nodes[i], &rdata->mugi->nodes[i + 1], sizeof(node) * (rdata->mugi->nb_nodes - i - 1));
+                rdata->mugi->nb_nodes --;
                 i --;
 
             } else if ((now - rdata->mugi->nodes[i].last_mess_time) > PING_TIMEOUT) {

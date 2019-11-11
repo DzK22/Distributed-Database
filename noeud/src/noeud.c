@@ -158,7 +158,8 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
     }
 
     if (found != -1) {
-        strncpy(ndata->datas[found].value, tmp, strlen(tmp));
+        strncpy(ndata->datas[found].value, tmp, strlen(tmp) + 1);
+        printf("tmp = %s et ndata = %s\n", tmp, ndata->datas[found].value);
     }
     else {
         strncpy(ndata->datas[ndata->nb_infos].login, username, strlen(username));
@@ -254,10 +255,11 @@ int send_meet (nodedata *ndata)
         return -1;
     }
 
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NREQ_MEET, NORMAL, ndata->relais_saddr.sin_addr.s_addr, ndata->relais_saddr.sin_port, bytes, buf) == -1)
+    dgram *new_dg;
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, &new_dg, ndata->id_counter ++, NREQ_MEET, NORMAL, ndata->relais_saddr.sin_addr.s_addr, ndata->relais_saddr.sin_port, bytes, buf) == -1)
         return -1;
 
-    ndata->dgsent->resend_timeout_cb = meet_timeout;
+    new_dg->resend_timeout_cb = meet_timeout;
 
     return 0;
 }
