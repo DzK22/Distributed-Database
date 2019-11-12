@@ -73,10 +73,12 @@ int exec_dg (const dgram *dg, void *data)
                 return -1;
             break;
         case NRES_WRITE:
+            rdata->mugi->req_rec++;
             if (exec_nres_write(dg, rdata) == -1)
                 return -1;
             break;
         case NRES_DELETE:
+            rdata->mugi->req_rec++;
             if (exec_nres_delete(dg, rdata) == -1)
                 return -1;
             break;
@@ -268,6 +270,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
             dgram *new_dg;
             if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_WRITE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, bytes, buf) == -1)
                 return -1;
+            rdata->mugi->req_send++;
             new_dg->resend_timeout_cb = node_send_timeout;
             new_dg->resend_timeout_cb_cparam = rdata;
             filled = true;
@@ -302,6 +305,7 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
         dgram *new_dg;
         if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
             return -1;
+        rdata->mugi->req_send++;
         new_dg->resend_timeout_cb = node_send_timeout;
         new_dg->resend_timeout_cb_cparam = rdata;
         filled = true;
@@ -457,9 +461,12 @@ int exec_nres_write (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL) // le client a été déconnecté entre temps
         return 1;
 
-    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
-        return -1;
-
+    if (rdata->mugi->req_rec == rdata->mugi->req_send)  {
+      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
+          return -1;
+      rdata->mugi->req_rec = 0;
+      rdata->mugi->req_send = 0;
+    }
     return 0;
 }
 
@@ -473,9 +480,12 @@ int exec_nres_delete (const dgram *dg, relaisdata *rdata)
     if (authusr == NULL) // le client s'est déconnecté entre temps
         return 1;
 
-    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
-        return -1;
-
+    if (rdata->mugi->req_rec == rdata->mugi->req_send) {
+      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
+          return -1;
+      rdata->mugi->req_rec = 0;
+      rdata->mugi->req_send = 0;
+    }
     return 0;
 }
 
@@ -694,7 +704,8 @@ mugiwara *init_mugiwara ()
         perror("malloc");
         return NULL;
     }
-
+    mugi->req_send = 0;
+    mugi->req_rec = 0;
     return mugi;
 }
 

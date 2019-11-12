@@ -53,6 +53,9 @@ typedef struct mugiwara {
     size_t nb_nodes;    // nombre de noeuds actuels
     size_t max_nodes;   // max de noeuds
     size_t node_id_counter;
+
+    size_t req_send;    //nb_requetes envoyées aux noeuds
+    size_t req_rec;     //nb_résultats provenant des noeuds
 } mugiwara;
 
 typedef struct {
