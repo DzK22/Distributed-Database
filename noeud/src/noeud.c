@@ -141,7 +141,8 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
 
     char *username, *tmp, data_cpy[DG_DATA_MAX];
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
-    username = strtok_r(data_cpy, ":", &tmp);
+    char *id = strtok_r(data_cpy, ":", &tmp);                  //pour enlever l'id;
+    username = strtok_r(NULL, ":", &tmp);
     if (username == NULL) {
         fprintf(stderr, "strtok_r error ?\n");
         return 1;
@@ -159,7 +160,7 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
 
     if (found != -1) {
         strncpy(ndata->datas[found].value, tmp, strlen(tmp) + 1);
-        printf("tmp = %s et ndata = %s\n", tmp, ndata->datas[found].value);
+        //printf("tmp = %s et ndata = %s\n", tmp, ndata->datas[found].value);
     }
     else {
         strncpy(ndata->datas[ndata->nb_infos].login, username, strlen(username));
@@ -167,7 +168,14 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
         ndata->nb_infos++;
     }
 
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_WRITE, SUCCESS, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
+    int identifiant = atoi(id);
+    char buf[DG_DATA_MAX];
+    int ret = snprintf(buf, DG_DATA_MAX, "%d", identifiant);
+    if (ret >= DG_DATA_MAX || ret < 0) {
+        fprintf(stderr, "snprintf error\n");
+        return -1;
+    }
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_WRITE, SUCCESS, dg->addr, dg->port, strnlen(buf, FIELD_MAX), buf) == -1)
         return -1;
 
     return 0;
@@ -175,7 +183,14 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
 
 int exec_rreq_delete (const dgram *dg, nodedata *ndata)
 {
-    const char *username = dg->data;
+    char *username, *tmp, data_cpy[DG_DATA_MAX];
+    strncpy(data_cpy, dg->data, DG_DATA_MAX);
+    char *id = strtok_r(data_cpy, ":", &tmp);                  //pour enlever l'id;
+    username = strtok_r(NULL, ":", &tmp);
+    if (username == NULL) {
+        fprintf(stderr, "strtok_r error ?\n");
+        return 1;
+    }
     size_t i;
     for (i = 0; i < ndata->nb_infos; i++)
     {
@@ -186,18 +201,15 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
         }
     }
 
+    int val = atoi(id);
     char buf[DG_DATA_MAX];
-    int val = snprintf(buf, DG_DATA_MAX, "%s", username);
-    if (val >= DG_DATA_MAX) {
-        fprintf(stderr, "snprintf truncate\n");
-        return 1;
-    } else if (val < 0) {
-        perror("snprintf");
-        return -1;
+    int ret = snprintf(buf, DG_DATA_MAX, "%d", val);
+    if (ret >= DG_DATA_MAX || ret < 0) {
+      fprintf(stderr, "snprintf error\n");
+      return -1;
     }
-
     // envoyer succes au relais
-    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_DELETE, SUCCESS, dg->addr, dg->port, strnlen(username, FIELD_MAX), username) == -1)
+    if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_DELETE, SUCCESS, dg->addr, dg->port, strnlen(buf, FIELD_MAX), buf) == -1)
         return -1;
 
     return 0;

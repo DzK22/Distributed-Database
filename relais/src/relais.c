@@ -39,6 +39,9 @@ int exec_dg (const dgram *dg, void *data)
     relaisdata *rdata = data;
     printf("nb nodes = %ld | nb hosts = %ld\n", rdata->mugi->nb_nodes, rdata->mugi->nb_hosts);
     update_last_mess_time_from_dg(dg, rdata);
+    char *id;
+    waiting_res *wait_res;
+    int identifiant;
     switch (dg->request) {
         case CREQ_AUTH:
             if (exec_creq_auth(dg, rdata) == -1)
@@ -73,12 +76,26 @@ int exec_dg (const dgram *dg, void *data)
                 return -1;
             break;
         case NRES_WRITE:
-            rdata->mugi->req_rec++;
+            id = get_id_from_dg(dg);
+            if (id == NULL)
+                return -1;
+            identifiant = atoi(id);
+            wait_res = get_wait_from_id(identifiant, rdata);
+            if (wait_res == NULL)
+                return -1;
+            rdata->mugi->req_tonode[wait_res->id].nb_rec++;
             if (exec_nres_write(dg, rdata) == -1)
                 return -1;
             break;
         case NRES_DELETE:
-            rdata->mugi->req_rec++;
+            id = get_id_from_dg(dg);
+            if (id == NULL)
+                return -1;
+            identifiant = atoi(id);
+            wait_res = get_wait_from_id(identifiant, rdata);
+            if (wait_res == NULL)
+                return -1;
+            rdata->mugi->req_tonode[wait_res->id].nb_rec++;
             if (exec_nres_delete(dg, rdata) == -1)
                 return -1;
             break;
@@ -242,6 +259,14 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
         return 1;
     }
 
+    /*AJOUTEZ LE CODE POUR WAITING RES*/
+    waiting_res wr;
+    wr.id = rdata->mugi->nb_reqtonode;
+    wr.nb_send = 0;
+    wr.nb_rec = 0;
+    wr.to = rdata->mugi->hosts;
+    /*FIN AJOUTER*/
+
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     field_plus_val = strtok_r(data_cpy, ",", &tmp);
     while (field_plus_val != NULL) {
@@ -257,7 +282,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
 
             // OK
             value = strtok_r(NULL, ":", &tmp2);
-            bytes = snprintf(buf, DG_DATA_MAX, "%s:%s", usr->login, value);
+            bytes = snprintf(buf, DG_DATA_MAX, "%ld:%s:%s", wr.id, usr->login, value);
             if (bytes >= N) {
                 fprintf(stderr, "snprintf truncate\n");
                 return 1;
@@ -270,7 +295,8 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
             dgram *new_dg;
             if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_WRITE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, bytes, buf) == -1)
                 return -1;
-            rdata->mugi->req_send++;
+
+            wr.nb_send++;
             new_dg->resend_timeout_cb = node_send_timeout;
             new_dg->resend_timeout_cb_cparam = rdata;
             filled = true;
@@ -284,6 +310,9 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
         }
         field_plus_val = strtok_r(NULL, ",", &tmp);
     }
+
+    //add aussi
+    rdata->mugi->req_tonode[rdata->mugi->nb_reqtonode++] = wr;
     return 0;
 }
 
@@ -298,14 +327,26 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
     }
     bool filled = false;
     size_t i;
+
+    /*AJOUTEZ LE CODE POUR WAITING RES*/
+    waiting_res wr;
+    wr.id = rdata->mugi->nb_reqtonode;
+    wr.nb_send = 0;
+    wr.nb_rec = 0;
+    wr.to = rdata->mugi->hosts;
+    /*FIN AJOUTER*/
+
     for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
         if (!rdata->mugi->nodes[i].active)
             continue;
 
+        char buf[DG_DATA_MAX];
+        snprintf(buf, DG_DATA_MAX, "%ld:%s", wr.id, usr->login);
         dgram *new_dg;
-        if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(usr->login, MAX_ATTR), usr->login) == -1)
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(buf, MAX_ATTR), buf) == -1)
             return -1;
-        rdata->mugi->req_send++;
+
+        wr.nb_send++;
         new_dg->resend_timeout_cb = node_send_timeout;
         new_dg->resend_timeout_cb_cparam = rdata;
         filled = true;
@@ -317,6 +358,9 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
           return -1;
       return 1;
     }
+
+    //add aussi
+    rdata->mugi->req_tonode[rdata->mugi->nb_reqtonode++] = wr;
     return 0;
 }
 
@@ -448,43 +492,55 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
 int exec_nres_write (const dgram *dg, relaisdata *rdata)
 {
     // /!/ dg->data = <user>
-    char *username, *tmp, data_cpy[DG_DATA_MAX];
-    strncpy(data_cpy, dg->data, DG_DATA_MAX);
-    username = strtok_r(data_cpy, ":", &tmp);
-    if (!username) {
-        fprintf(stderr, "strtok_r error ?\n");
-        return 1;
-    }
-
-    // envoyer success au client
-    auth_user *authusr = get_auth_user_from_login(username, rdata);
-    if (authusr == NULL) // le client a été déconnecté entre temps
+    char *id = get_id_from_dg(dg);
+    if (id == NULL)
         return 1;
 
-    if (rdata->mugi->req_rec == rdata->mugi->req_send)  {
-      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
+    int identifiant = atoi(id);
+    waiting_res *wait_res = get_wait_from_id(identifiant, rdata);
+    if (wait_res == NULL)
+        return 1;
+
+    if (rdata->mugi->req_tonode[wait_res->id].nb_rec == rdata->mugi->req_tonode[wait_res->id].nb_send)  {
+      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, SUCCESS, wait_res->to->saddr.sin_addr.s_addr, wait_res->to->saddr.sin_port, 0, NULL) == -1)
           return -1;
-      rdata->mugi->req_rec = 0;
-      rdata->mugi->req_send = 0;
+
+      memmove(&rdata->mugi->req_tonode[wait_res->id], &rdata->mugi->hosts[wait_res->id + 1], sizeof(waiting_res) * (rdata->mugi->nb_reqtonode - wait_res->id - 1));
+      rdata->mugi->nb_reqtonode--;
     }
     return 0;
+}
+
+char * get_id_from_dg(const dgram *dg)
+{
+    char *id, *tmp, data_cpy[DG_DATA_MAX];
+    strncpy(data_cpy, dg->data, DG_DATA_MAX);
+    id = strtok_r(data_cpy, ":", &tmp);
+    if (!id) {
+      fprintf(stderr, "strtok_r error ?\n");
+      return NULL;
+    }
+    return id;
 }
 
 int exec_nres_delete (const dgram *dg, relaisdata *rdata)
 {
     // /!/ dg->data = <user>
-    char *username = dg->data;
-
-    // envoyer success au client
-    auth_user *authusr = get_auth_user_from_login(username, rdata);
-    if (authusr == NULL) // le client s'est déconnecté entre temps
+    char *id = get_id_from_dg(dg);
+    if (id == NULL)
         return 1;
 
-    if (rdata->mugi->req_rec == rdata->mugi->req_send) {
-      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, SUCCESS, authusr->saddr.sin_addr.s_addr, authusr->saddr.sin_port, 0, NULL) == -1)
+    int identifiant = atoi(id);
+    waiting_res *wait_res = get_wait_from_id(identifiant, rdata);
+    if (wait_res == NULL)
+        return 1;
+
+    if (rdata->mugi->req_tonode[wait_res->id].nb_rec == rdata->mugi->req_tonode[wait_res->id].nb_send) {
+      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, SUCCESS, wait_res->to->saddr.sin_addr.s_addr, wait_res->to->saddr.sin_port, 0, NULL) == -1)
           return -1;
-      rdata->mugi->req_rec = 0;
-      rdata->mugi->req_send = 0;
+
+      memmove(&rdata->mugi->req_tonode[wait_res->id], &rdata->mugi->hosts[wait_res->id + 1], sizeof(waiting_res) * (rdata->mugi->nb_reqtonode - wait_res->id - 1));
+      rdata->mugi->nb_reqtonode--;
     }
     return 0;
 }
@@ -539,6 +595,16 @@ auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata
             return &rdata->mugi->hosts[i];
     }
 
+    return NULL;
+}
+
+waiting_res * get_wait_from_id(const size_t id, const relaisdata *rdata)
+{
+    size_t i;
+    for (i = 0; i < rdata->mugi->nb_reqtonode; i++) {
+        if (id == rdata->mugi->req_tonode[i].id)
+            return &rdata->mugi->req_tonode[i];
+    }
     return NULL;
 }
 
@@ -704,8 +770,14 @@ mugiwara *init_mugiwara ()
         perror("malloc");
         return NULL;
     }
-    mugi->req_send = 0;
-    mugi->req_rec = 0;
+
+    mugi->nb_reqtonode = 0;
+    mugi->max_reqtonode = H;
+    mugi->req_tonode = malloc(sizeof(waiting_res) * H);
+    if (mugi->req_tonode == NULL) {
+        perror("malloc error");
+        return NULL;
+    }
     return mugi;
 }
 

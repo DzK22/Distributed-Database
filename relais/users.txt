@@ -2,5 +2,7 @@ utilisateur:mot-de-passe:nom-champ
 bonjour:toto:taille
 bonsoir:tata:age:taille:poids:prix
 francois:lamachine:poids:taille:note:age
-danyl:c'est_moi:poids
+danyl:elk:poids:age:taille:vision
 zorglub:33:prix:age
+monkeyD:luffy:age:haki:poids:mi
+lereseau:lavie:note

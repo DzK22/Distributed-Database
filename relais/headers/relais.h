@@ -37,6 +37,14 @@ typedef struct node {
     time_t last_mess_time;
 } node;
 
+typedef struct waiting_res {
+    size_t id;
+    auth_user *to;
+    size_t nb_send;
+    size_t nb_rec;
+    bool at_least_one;
+} waiting_res;
+
 /**
  * \struct mugiwara
  * \brief Structure contenant les utilisateurs (fichier), les clients actuellment connectés et les noeuds de données.
@@ -54,8 +62,9 @@ typedef struct mugiwara {
     size_t max_nodes;   // max de noeuds
     size_t node_id_counter;
 
-    size_t req_send;    //nb_requetes envoyées aux noeuds
-    size_t req_rec;     //nb_résultats provenant des noeuds
+    waiting_res *req_tonode;  //tableau regroupant les requetes envoyées aux noeuds;
+    size_t nb_reqtonode;      //nombre de requetes envoyées aux noeuds;
+    size_t max_reqtonode;
 } mugiwara;
 
 typedef struct {
@@ -93,6 +102,9 @@ node * get_node_from_dg (const dgram *dg, const relaisdata *rdata);
 auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata);
 void update_last_mess_time_from_dg (const dgram *dg, relaisdata *rdata);
 void * rthread_check_loop (void *data);
+waiting_res * get_wait_from_id(const size_t id, const relaisdata *rdata);
+
+char * get_id_from_dg(const dgram *dg);
 
 bool node_send_timeout (const dgram *dg);
 
