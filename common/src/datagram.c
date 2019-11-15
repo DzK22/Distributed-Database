@@ -377,8 +377,8 @@ void * thread_timeout_loop (void *arg) // arg = thread_targ
             perror("sigaddset");
             break;
         }
-        if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1) {
-            perror("sigprocmask");
+        if (pthread_sigmask(SIG_BLOCK, &mask, NULL) == -1) {
+            perror("sigmask");
             break;
         }
 
@@ -387,8 +387,8 @@ void * thread_timeout_loop (void *arg) // arg = thread_targ
         if (dgram_check_timeout_resend(targ->sck, targ->dgsent) == -1)
             break;
 
-        if (sigprocmask(SIG_UNBLOCK, &mask, NULL) == -1) {
-            perror("sigprocmask");
+        if (pthread_sigmask(SIG_UNBLOCK, &mask, NULL) == -1) {
+            perror("sigmask");
             break;
         }
         if (sem_post(targ->gsem) == -1) {
