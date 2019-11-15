@@ -42,7 +42,8 @@ typedef struct waiting_res {
     auth_user *to;
     size_t nb_send;
     size_t nb_rec;
-    bool at_least_one;
+    int success_type;
+    time_t last_time_rec;
 } waiting_res;
 
 /**
@@ -62,9 +63,10 @@ typedef struct mugiwara {
     size_t max_nodes;   // max de noeuds
     size_t node_id_counter;
 
-    waiting_res *req_tonode;  //tableau regroupant les requetes envoyées aux noeuds;
-    size_t nb_reqtonode;      //nombre de requetes envoyées aux noeuds;
-    size_t max_reqtonode;
+    waiting_res *node_responses;  //tableau regroupant les requetes envoyées aux noeuds;
+    size_t nb_responses;      //nombre de requetes envoyées aux noeuds;
+    size_t responses_counter;
+    size_t max_responses;
 } mugiwara;
 
 typedef struct {
@@ -102,7 +104,11 @@ node * get_node_from_dg (const dgram *dg, const relaisdata *rdata);
 auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata);
 void update_last_mess_time_from_dg (const dgram *dg, relaisdata *rdata);
 void * rthread_check_loop (void *data);
-waiting_res * get_wait_from_id(const size_t id, const relaisdata *rdata);
+ssize_t get_ind_from_wait(const size_t id, const relaisdata *rdata);
+
+waiting_res * add_node_responses(int nb_send, auth_user *host, int req_type, relaisdata *rdata);
+
+int check_node_responses(int resp_id, relaisdata *rdata);
 
 char * get_id_from_dg(const dgram *dg);
 
