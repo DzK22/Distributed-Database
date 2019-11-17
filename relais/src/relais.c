@@ -379,15 +379,20 @@ int exec_creq_logout (const dgram *dg, relaisdata *rdata)
         return 1;
     }
 
+    auth_user *conn = get_auth_user_from_login(usr->login, rdata);
+    if (conn == NULL)
+        return 1;
+
     size_t i;
     for (i = 0; i < rdata->mugi->nb_hosts; i++)
     {
       if (strncmp(usr->login, rdata->mugi->hosts[i].login, strlen(usr->login)) == 0) {
-          memmove(&rdata->mugi->hosts[i], &rdata->mugi->hosts[i + 1], sizeof(auth_user) * (rdata->mugi->nb_hosts - i - 1));
-          rdata->mugi->nb_hosts--;
-          if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_LOGOUT, SUCCESS, rdata->mugi->hosts[i].saddr.sin_addr.s_addr, rdata->mugi->hosts[i].saddr.sin_port, 0, NULL) == -1) {
+          if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_LOGOUT, SUCCESS, conn->saddr.sin_addr.s_addr, conn->saddr.sin_port, 0, NULL) == -1) {
               return -1;
           }
+          memmove(&rdata->mugi->hosts[i], &rdata->mugi->hosts[i + 1], sizeof(auth_user) * (rdata->mugi->nb_hosts - i - 1));
+          rdata->mugi->nb_hosts--;
+
       }
     }
     return 0;
