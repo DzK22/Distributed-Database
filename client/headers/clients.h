@@ -11,6 +11,7 @@
 #include "../../common/headers/sck.h"
 
 #define LOGIN_MAX 32
+#define N 32
 
 typedef struct {
     int sck;

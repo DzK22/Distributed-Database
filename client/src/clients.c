@@ -201,7 +201,20 @@ void print_read_res (const dgram *dg)
     if (empty)
         printf("\33[2K\r  \033[36m%saucune donnée\033[0m\n", dg->data);
     else
-        printf("\33[2K\r  \033[36m%s\033[0m\n", dg->data);
+    {
+      char temp[N] = "", *tmp = "";
+      strncpy(temp, dg->data, strlen(dg->data));
+      char *field = strtok_r(temp, ":", &tmp);
+      char *log, *tout, *tmpval;
+      while ((tout = strtok_r(NULL, ",", &tmp)) != NULL)
+      {
+        char toutmp[N] = "";
+        strncpy(toutmp, tout, strlen(tout));
+        log = strtok_r(toutmp, ":", &tmpval);
+        log[strlen(log)] = '\0';
+        printf("\33[2K\r  \033[36m%s %s = %s\033[0m\n", log, field, tmpval);
+      }
+    }
 }
 
 void print_prompt (const clientdata *cdata)
