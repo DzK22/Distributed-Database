@@ -106,7 +106,12 @@ void update_last_mess_time_from_dg (const dgram *dg, relaisdata *rdata);
 void * rthread_check_loop (void *data);
 ssize_t get_ind_from_wait(const size_t id, const relaisdata *rdata);
 
-waiting_res * add_node_responses (int nb_send, auth_user *host, int req_type, relaisdata *rdata);
+waiting_res * add_node_responses(auth_user *host, int req_type, relaisdata *rdata);
+
+int check_node_responses(int resp_id, relaisdata *rdata);
+
+char * get_id_from_dg(const dgram *dg);
+>>>>>>> bd8a4d8074676e57425f527a77953a13459657fa
 
 int check_node_responses (int resp_id, relaisdata *rdata);
 char * get_id_from_dg (const dgram *dg);
