@@ -240,19 +240,13 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
         return 1;
     }
 
-    size_t count = 0;
-    for (i = 0; i < rdata->mugi->nb_nodes; i ++)
-    {
-      if (!rdata->mugi->nodes[i].active)
-          continue;
-      count ++;
-    }
+    size_t real_count = 0;
 
     auth_user *pseudo = get_auth_user_from_login(usr->login, rdata);
     if (pseudo == NULL)
         return 1;
 
-    waiting_res *wr = add_node_responses(count, pseudo, RRES_WRITE, rdata);
+    waiting_res *wr = add_node_responses(pseudo, RRES_WRITE, rdata);
     if (wr == NULL)
         return 1;
 
@@ -285,6 +279,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
             if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_WRITE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, bytes, buf) == -1)
                 return -1;
 
+            real_count++;
             new_dg->resend_timeout_cb = node_send_timeout;
             new_dg->resend_timeout_cb_cparam = rdata;
             filled = true;
@@ -298,11 +293,13 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
         }
         field_plus_val = strtok_r(NULL, ",", &tmp);
     }
+    int ind = get_ind_from_wait(wr->id, rdata);
+    rdata->mugi->node_responses[ind].nb_send = real_count;
     return 0;
 }
 
 /*return int*/
-waiting_res * add_node_responses(int nb_send, auth_user *host, int req_type, relaisdata *rdata)
+waiting_res * add_node_responses(auth_user *host, int req_type, relaisdata *rdata)
 {
   waiting_res *wr = malloc(sizeof(waiting_res));
   if (wr == NULL) {
@@ -310,7 +307,6 @@ waiting_res * add_node_responses(int nb_send, auth_user *host, int req_type, rel
     return NULL;
   }
   wr->id = rdata->mugi->responses_counter++;
-  wr->nb_send = nb_send;
   wr->nb_rec = 0;
   wr->to = host;
   wr->success_type = req_type;
@@ -328,20 +324,13 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
         return 1;
     }
     bool filled = false;
-    size_t i, count = 0;
-
-    for (i = 0; i < rdata->mugi->nb_nodes; i ++)
-    {
-      if (!rdata->mugi->nodes[i].active)
-          continue;
-      count ++;
-    }
+    size_t i, real_count = 0;
 
     auth_user *pseudo = get_auth_user_from_login(usr->login, rdata);
     if (pseudo == NULL)
         return 1;
 
-    waiting_res *wr = add_node_responses(count, pseudo, RRES_DELETE, rdata);
+    waiting_res *wr = add_node_responses(pseudo, RRES_DELETE, rdata);
     if (wr == NULL)
         return 1;
 
@@ -355,6 +344,7 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
         if (dgram_create_send(rdata->sck, &rdata->dgsent, &new_dg, rdata->id_counter ++, RREQ_DELETE, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, strnlen(buf, MAX_ATTR), buf) == -1)
             return -1;
 
+        real_count++;
         new_dg->resend_timeout_cb = node_send_timeout;
         new_dg->resend_timeout_cb_cparam = rdata;
         filled = true;
@@ -366,6 +356,8 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
           return -1;
       return 1;
     }
+    int ind = get_ind_from_wait(wr->id, rdata);
+    rdata->mugi->node_responses[ind].nb_send = real_count;
     return 0;
 }
 
@@ -506,7 +498,9 @@ int exec_nres_write (const dgram *dg, relaisdata *rdata)
     int ind = get_ind_from_wait(identifiant, rdata);
     if (ind == -1)
         return 1;
+    printf("hello send = %ld\n", rdata->mugi->node_responses[ind].nb_send);
     rdata->mugi->node_responses[ind].nb_rec++;
+    printf("hello rec = %ld\n", rdata->mugi->node_responses[ind].nb_rec);
     if (check_node_responses(identifiant, rdata) == -1)
         return -1;
     return 0;
