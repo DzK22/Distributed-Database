@@ -57,14 +57,6 @@ int read_stdin (clientdata *cdata)
         return -1;
     }
 
-    if (!cdata->is_auth) {
-        dgram tmp;
-        tmp.status = ERR_NOTAUTH;
-        tmp.request = RRES_AUTH;
-        dgram_print_status(&tmp);
-        return 1;
-    }
-
     data[strnlen(data, DG_DATA_MAX) - 1] = '\0';
     size_t data_len = strnlen(data, DG_DATA_MAX);
     char *request_str, *tmp;
@@ -112,6 +104,16 @@ int read_stdin (clientdata *cdata)
         return 1;
     }
 
+    if (!cdata->is_auth) {
+        if (request == CREQ_LOGOUT)
+            return -1;
+        dgram tmp;
+        tmp.status = ERR_NOTAUTH;
+        tmp.request = RRES_AUTH;
+        dgram_print_status(&tmp);
+        return 1;
+    }
+
     if ((!arg && (data_len > instr_len)) || (arg && (data_len <= instr_len))) {
         dgram tmp;
         tmp.status = ERR_SYNTAX;
@@ -122,7 +124,7 @@ int read_stdin (clientdata *cdata)
 
     dgram *dg;
     if (dgram_create_send(cdata->sck, &cdata->dgsent, &dg, cdata->id_counter ++, request, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, arg ? data_len : 0, arg ? data + instr_len : NULL) == -1)
-       return -1;
+        return -1;
     dg->resend_timeout_cb = req_timeout;
 
     return 0;
@@ -130,7 +132,7 @@ int read_stdin (clientdata *cdata)
 
 int exec_dg (const dgram *dg, void *data)
 {
-   clientdata *cdata = data;
+    clientdata *cdata = data;
     switch (dg->request) {
         case RRES_AUTH:
             dgram_print_status(dg);
@@ -185,7 +187,7 @@ int send_auth (const char *login, const char *password, clientdata *cdata)
 
     dgram *dg;
     if (dgram_create_send(cdata->sck, &cdata->dgsent, &dg, cdata->id_counter ++, CREQ_AUTH, NORMAL, cdata->relais_saddr->sin_addr.s_addr, cdata->relais_saddr->sin_port, res, buf) == -1)
-       return -1;
+        return -1;
     dg->resend_timeout_cb = req_timeout;
 
     return 0;
@@ -197,9 +199,9 @@ void print_read_res (const dgram *dg)
     if (strchr(dg->data, ':') == (dg->data + dg->data_len - 2))
         empty = true;
     if (empty)
-        printf("  \033[36m%saucune donnée\033[0m\n", dg->data);
+        printf("\33[2K\r  \033[36m%saucune donnée\033[0m\n", dg->data);
     else
-        printf("  \033[36m%s\033[0m\n", dg->data);
+        printf("\33[2K\r  \033[36m%s\033[0m\n", dg->data);
 }
 
 void print_prompt (const clientdata *cdata)
@@ -231,6 +233,6 @@ void signal_handler (int sig)
     printf("\n");
     dgram *dg;
     if (dgram_create_send(cdata_global->sck, &cdata_global->dgsent, &dg, cdata_global->id_counter ++, CREQ_LOGOUT, NORMAL, cdata_global->relais_saddr->sin_addr.s_addr, cdata_global->relais_saddr->sin_port, 0, NULL) == -1)
-       return;
+        return;
     dg->resend_timeout_cb = req_timeout;
 }

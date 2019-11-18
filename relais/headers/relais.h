@@ -10,8 +10,8 @@
 #define N 1024
 #define MAX_ATTR 32
 #define H 32
-#define PING_TIMEOUT 4
-#define DISCONNECT_TIMEOUT 10
+#define PING_TIMEOUT 3
+#define DISCONNECT_TIMEOUT 6
 
 #include "../../common/headers/datagram.h"
 #include "../../common/headers/sck.h"
@@ -64,7 +64,7 @@ typedef struct mugiwara {
     size_t node_id_counter;
 
     waiting_res *node_responses;  //tableau regroupant les requetes envoyées aux noeuds;
-    size_t nb_responses;      //nombre de requetes envoyées aux noeuds;
+    size_t nb_responses;      //nombre de node_responses actuel
     size_t responses_counter;
     size_t max_responses;
 } mugiwara;
@@ -106,12 +106,10 @@ void update_last_mess_time_from_dg (const dgram *dg, relaisdata *rdata);
 void * rthread_check_loop (void *data);
 ssize_t get_ind_from_wait(const size_t id, const relaisdata *rdata);
 
-waiting_res * add_node_responses(int nb_send, auth_user *host, int req_type, relaisdata *rdata);
+waiting_res * add_node_responses (int nb_send, auth_user *host, int req_type, relaisdata *rdata);
 
-int check_node_responses(int resp_id, relaisdata *rdata);
-
-char * get_id_from_dg(const dgram *dg);
-
+int check_node_responses (int resp_id, relaisdata *rdata);
+char * get_id_from_dg (const dgram *dg);
 bool node_send_timeout (const dgram *dg);
 
 #endif

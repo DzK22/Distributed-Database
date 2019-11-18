@@ -49,8 +49,8 @@ ssize_t sck_recv (const int sck, void *buf, const size_t buf_max, const struct s
     socklen_t salen = sizeof(struct sockaddr_in);
     ssize_t bytes;
     if ((bytes = recvfrom(sck, buf, buf_max , 0, (struct sockaddr *) saddr, &salen)) == -1) {
-      perror("recvfrom");
-      return -1;
+        perror("recvfrom");
+        return -1;
     }
 
     return bytes;

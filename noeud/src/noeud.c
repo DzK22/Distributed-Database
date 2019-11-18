@@ -205,8 +205,8 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
     char buf[DG_DATA_MAX];
     int ret = snprintf(buf, DG_DATA_MAX, "%d", val);
     if (ret >= DG_DATA_MAX || ret < 0) {
-      fprintf(stderr, "snprintf error\n");
-      return -1;
+        fprintf(stderr, "snprintf error\n");
+        return -1;
     }
     // envoyer succes au relais
     if (dgram_create_send(ndata->sck, &ndata->dgsent, NULL, ndata->id_counter ++, NRES_DELETE, SUCCESS, dg->addr, dg->port, strnlen(buf, FIELD_MAX), buf) == -1)

@@ -1,8 +1,8 @@
 /**
-* \file clients.h
-* \brief Déclarations des fonctions de gestion de clients
-* \author François et Danyl
-*/
+ * \file clients.h
+ * \brief Déclarations des fonctions de gestion de clients
+ * \author François et Danyl
+ */
 
 #ifndef __CLIENTS_H__
 #define __CLIENTS_H__

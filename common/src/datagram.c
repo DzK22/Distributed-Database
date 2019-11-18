@@ -4,6 +4,7 @@ bool dg_debug_active = true;
 
 int dgram_print_status (const dgram *dg)
 {
+    printf("\33[2K\r");
     if (dg->status == NORMAL) // error
         printf("  \033[96m"); // cyan
     else if (dg->status == SUCCESS)
@@ -43,6 +44,8 @@ int dgram_print_status (const dgram *dg)
             break;
         case ERR_NONODE:
             printf("Aucun noeud trouvé");
+            if (dg->data_len > 0)
+                printf(" pour: %s", dg->data);
             break;
         case ERR_SYNTAX:
             printf("Syntaxe incorrecte");

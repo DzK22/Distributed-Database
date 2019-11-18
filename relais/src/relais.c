@@ -181,11 +181,12 @@ int exec_creq_read (const dgram *dg, relaisdata *rdata)
     size_t i;
     char *tmp, *field, buf[DG_DATA_MAX];
     int val;
-    size_t cpt = 0, n_fields = 0;
+    size_t cpt = 0;
+    bool field_filled;
 
     field = strtok_r(dg->data, ",", &tmp);
     while (field != NULL) {
-        n_fields ++;
+        field_filled = false;
         for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
             if (strncmp(field, rdata->mugi->nodes[i].field, strlen(field)) != 0)
                 continue;
@@ -208,17 +209,19 @@ int exec_creq_read (const dgram *dg, relaisdata *rdata)
             new_dg->resend_timeout_cb = node_send_timeout;
             new_dg->resend_timeout_cb_cparam = rdata;
             cpt ++;
+            field_filled = true;
             break;
+        }
+
+        if (!field_filled) {
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_READ, ERR_NONODE, dg->addr, dg->port, strlen(field), field) == -1)
+                return -1;
+
         }
 
         field = strtok_r(NULL, ",", &tmp);
     }
 
-    if (n_fields != cpt) {
-        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_READ, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
-            return -1;
-        return 1;
-    }
 
     return 0;
 }
@@ -241,25 +244,89 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
     }
 
     size_t count = 0;
-    for (i = 0; i < rdata->mugi->nb_nodes; i ++)
-    {
-      if (!rdata->mugi->nodes[i].active)
-          continue;
-      count ++;
+    for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
+        if (!rdata->mugi->nodes[i].active)
+            continue;
+        count ++;
     }
 
-    auth_user *pseudo = get_auth_user_from_login(usr->login, rdata);
-    if (pseudo == NULL)
+    auth_user *host = get_auth_user_from_login(usr->login, rdata);
+    if (host == NULL)
         return 1;
 
-    waiting_res *wr = add_node_responses(count, pseudo, RRES_WRITE, rdata);
-    if (wr == NULL)
-        return 1;
-
+    // syntax check
+    bool syntax_err = false;
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
+    field_plus_val = strtok_r(data_cpy, ",", &tmp);
+    if (field_plus_val == NULL) {
+        syntax_err = true;
+        printf("fpv errro\n");
+    }
+    while (!syntax_err && (field_plus_val != NULL)) {
+        tmp2 = NULL;
+        strncpy(field_plus_val_cpy, field_plus_val, MAX_ATTR);
+        field = strtok_r(field_plus_val_cpy, ":", &tmp2);
+        if ((field == NULL) || (strnlen(field, MAX_ATTR) == 0))  {
+            printf("field errro\n");
+            syntax_err = true;
+            break;
+        }
+        value = strtok_r(NULL, ":", &tmp2);
+        if ((value == NULL) || (strnlen(value, MAX_ATTR) == 0)) {
+            printf("value errro\n");
+            if (value == NULL)
+                printf("value == null\n");
+            else
+                printf("strnlen == 0\n");
+            syntax_err = true;
+            break;
+        }
+
+        field_plus_val = strtok_r(NULL, ",", &tmp);
+    }
+
+    if (syntax_err) {
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, ERR_SYNTAX, dg->addr, dg->port, 0, NULL) == -1)
+            return -1;
+        return 1;
+    }
+
+    // verifier les noeuds sinon NONODE
+    strncpy(data_cpy, dg->data, DG_DATA_MAX);
+    tmp = NULL;
     field_plus_val = strtok_r(data_cpy, ",", &tmp);
     while (field_plus_val != NULL) {
         filled = false;
+        for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
+            tmp2 = NULL;
+            strncpy(field_plus_val_cpy, field_plus_val, MAX_ATTR);
+            field = strtok_r(field_plus_val_cpy, ":", &tmp2);
+            if (strncmp(field, rdata->mugi->nodes[i].field, strnlen(field, MAX_ATTR)) != 0)
+                continue;
+            if (!rdata->mugi->nodes[i].active)
+                continue;
+            filled = true;
+        }
+
+        if (!filled) {
+            // no node found for some field(s)
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, ERR_NONODE, dg->addr, dg->port, strlen(field), field) == -1)
+                return -1;
+            return 1;
+        }
+
+        field_plus_val = strtok_r(NULL, ",", &tmp);
+    }
+
+    waiting_res *wr = add_node_responses(count, host, RRES_WRITE, rdata);
+    if (wr == NULL)
+        return 1;
+
+    // main loop to send data
+    strncpy(data_cpy, dg->data, DG_DATA_MAX);
+    tmp = NULL;
+    field_plus_val = strtok_r(data_cpy, ",", &tmp);
+    while (field_plus_val != NULL) {
         for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
             tmp2 = NULL;
             strncpy(field_plus_val_cpy, field_plus_val, MAX_ATTR);
@@ -287,35 +354,30 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
 
             new_dg->resend_timeout_cb = node_send_timeout;
             new_dg->resend_timeout_cb_cparam = rdata;
-            filled = true;
         }
 
-        if (!filled) {
-            // no node found for some field(s)
-            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
-                return -1;
-            return 1;
-        }
         field_plus_val = strtok_r(NULL, ",", &tmp);
     }
+
     return 0;
 }
 
 /*return int*/
-waiting_res * add_node_responses(int nb_send, auth_user *host, int req_type, relaisdata *rdata)
+waiting_res * add_node_responses (int nb_send, auth_user *host, int req_type, relaisdata *rdata)
 {
-  waiting_res *wr = malloc(sizeof(waiting_res));
-  if (wr == NULL) {
-    perror("malloc error");
-    return NULL;
-  }
-  wr->id = rdata->mugi->responses_counter++;
-  wr->nb_send = nb_send;
-  wr->nb_rec = 0;
-  wr->to = host;
-  wr->success_type = req_type;
-  rdata->mugi->node_responses[rdata->mugi->nb_responses++] = *wr;
-  return wr;
+    waiting_res *wr = malloc(sizeof(waiting_res));
+    if (wr == NULL) {
+        perror("malloc error");
+        return NULL;
+    }
+    wr->id = rdata->mugi->responses_counter++;
+    wr->nb_send = nb_send;
+    wr->nb_rec = 0;
+    wr->to = host;
+    wr->success_type = req_type;
+    wr->last_time_rec = time(NULL);
+    rdata->mugi->node_responses[rdata->mugi->nb_responses++] = *wr;
+    return wr;
 }
 
 int exec_creq_delete (const dgram *dg, relaisdata *rdata)
@@ -330,18 +392,17 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
     bool filled = false;
     size_t i, count = 0;
 
-    for (i = 0; i < rdata->mugi->nb_nodes; i ++)
-    {
-      if (!rdata->mugi->nodes[i].active)
-          continue;
-      count ++;
+    for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
+        if (!rdata->mugi->nodes[i].active)
+            continue;
+        count ++;
     }
 
-    auth_user *pseudo = get_auth_user_from_login(usr->login, rdata);
-    if (pseudo == NULL)
+    auth_user *host = get_auth_user_from_login(usr->login, rdata);
+    if (host == NULL)
         return 1;
 
-    waiting_res *wr = add_node_responses(count, pseudo, RRES_DELETE, rdata);
+    waiting_res *wr = add_node_responses(count, host, RRES_DELETE, rdata);
     if (wr == NULL)
         return 1;
 
@@ -361,10 +422,10 @@ int exec_creq_delete (const dgram *dg, relaisdata *rdata)
     }
 
     if (!filled) {
-      //aucun noeud trouvé
-      if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_WRITE, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
-          return -1;
-      return 1;
+        //aucun noeud trouvé
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_DELETE, ERR_NONODE, dg->addr, dg->port, 0, NULL) == -1)
+            return -1;
+        return 1;
     }
     return 0;
 }
@@ -382,14 +443,14 @@ int exec_creq_logout (const dgram *dg, relaisdata *rdata)
     size_t i;
     for (i = 0; i < rdata->mugi->nb_hosts; i++)
     {
-      if (strncmp(usr->login, rdata->mugi->hosts[i].login, strlen(usr->login)) == 0) {
-          if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_LOGOUT, SUCCESS, rdata->mugi->hosts[i].saddr.sin_addr.s_addr, rdata->mugi->hosts[i].saddr.sin_port, 0, NULL) == -1) {
-              return -1;
-          }
-          memmove(&rdata->mugi->hosts[i], &rdata->mugi->hosts[i + 1], sizeof(auth_user) * (rdata->mugi->nb_hosts - i - 1));
-          rdata->mugi->nb_hosts--;
+        if (strncmp(usr->login, rdata->mugi->hosts[i].login, strlen(usr->login)) == 0) {
+            if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RRES_LOGOUT, SUCCESS, rdata->mugi->hosts[i].saddr.sin_addr.s_addr, rdata->mugi->hosts[i].saddr.sin_port, 0, NULL) == -1) {
+                return -1;
+            }
+            memmove(&rdata->mugi->hosts[i], &rdata->mugi->hosts[i + 1], sizeof(auth_user) * (rdata->mugi->nb_hosts - i - 1));
+            rdata->mugi->nb_hosts--;
 
-      }
+        }
     }
     return 0;
 }
@@ -506,7 +567,7 @@ int exec_nres_write (const dgram *dg, relaisdata *rdata)
     int ind = get_ind_from_wait(identifiant, rdata);
     if (ind == -1)
         return 1;
-    rdata->mugi->node_responses[ind].nb_rec++;
+    rdata->mugi->node_responses[ind].nb_rec ++;
     if (check_node_responses(identifiant, rdata) == -1)
         return -1;
     return 0;
@@ -518,8 +579,8 @@ char * get_id_from_dg(const dgram *dg)
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     id = strtok_r(data_cpy, ":", &tmp);
     if (!id) {
-      fprintf(stderr, "strtok_r error ?\n");
-      return NULL;
+        fprintf(stderr, "strtok_r error ?\n");
+        return NULL;
     }
     return id;
 }
@@ -541,21 +602,21 @@ int exec_nres_delete (const dgram *dg, relaisdata *rdata)
     return 0;
 }
 
-int check_node_responses(int resp_id, relaisdata *rdata)
+int check_node_responses (int resp_id, relaisdata *rdata)
 {
-  int ind = get_ind_from_wait(resp_id, rdata);
-  if (ind == -1)
-      return 1;
+    int ind = get_ind_from_wait(resp_id, rdata);
+    if (ind == -1)
+        return 1;
 
-  const waiting_res *wr = &rdata->mugi->node_responses[ind];
-  if (wr->nb_rec == wr->nb_send) {
-    if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, wr->success_type, SUCCESS, wr->to->saddr.sin_addr.s_addr, wr->to->saddr.sin_port, 0, NULL) == -1)
-        return -1;
+    const waiting_res *wr = &rdata->mugi->node_responses[ind];
+    if (wr->nb_rec == wr->nb_send) {
+        if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, wr->success_type, SUCCESS, wr->to->saddr.sin_addr.s_addr, wr->to->saddr.sin_port, 0, NULL) == -1)
+            return -1;
 
-    memmove(&rdata->mugi->node_responses[ind], &rdata->mugi->node_responses[ind + 1], sizeof(waiting_res) * (rdata->mugi->nb_responses - ind - 1));
-    rdata->mugi->nb_responses--;
-  }
-  return 0;
+        memmove(&rdata->mugi->node_responses[ind], &rdata->mugi->node_responses[ind + 1], sizeof(waiting_res) * (rdata->mugi->nb_responses - ind - 1));
+        rdata->mugi->nb_responses --;
+    }
+    return 0;
 }
 
 int exec_nres_getdata (const dgram *dg, relaisdata *rdata)
@@ -581,7 +642,7 @@ int exec_nres_getdata (const dgram *dg, relaisdata *rdata)
             continue;
 
         if (dgram_create_send(rdata->sck, &rdata->dgsent, NULL, rdata->id_counter ++, RREQ_SYNC, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, node_data ? strlen(node_data) : 0, node_data) == -1)
-        return -1;
+            return -1;
 
         break;
     }
@@ -732,11 +793,11 @@ mugiwara *init_mugiwara ()
         return NULL;
     }
     mugi->users = malloc(sizeof(user) * nb_lines);
-    if (mugi->users == NULL)
-    {
+    if (mugi->users == NULL) {
         perror("malloc error");
         return NULL;
     }
+
     mugi->nb_users = nb_lines;
     mugi->nb_hosts = 0;
     mugi->max_hosts = H;
@@ -744,8 +805,8 @@ mugiwara *init_mugiwara ()
     char line[N];
     char *tmp;
     char *str;
-    if (fseek(fp, 0, SEEK_SET) == -1)
-    {
+
+    if (fseek(fp, 0, SEEK_SET) == -1) {
         perror("fseek error");
         return NULL;
     }
@@ -862,6 +923,30 @@ void * rthread_check_loop (void *data)
                 // send PING mess
                 if (dgram_create_send(rdata->sck, NULL, NULL, rdata->id_counter ++, PING, NORMAL, rdata->mugi->nodes[i].saddr.sin_addr.s_addr, rdata->mugi->nodes[i].saddr.sin_port, 0, NULL) == -1)
                     return NULL;
+            }
+        }
+
+        waiting_res *wr;
+        for (i = 0; i < rdata->mugi->nb_responses; i ++) {
+            wr = &rdata->mugi->node_responses[i];
+            if ((now - wr->last_time_rec) > DISCONNECT_TIMEOUT) {
+                // delete the waiting_res and send response
+                printf("SUPPRESSION & SEND POUR WAITING RES - TIMEOUT REACHED\n");
+                // message au client
+                if (wr->nb_rec > 0) {
+                    // success
+                    if (dgram_create_send(rdata->sck, NULL, NULL, rdata->id_counter ++, wr->success_type, SUCCESS, wr->to->saddr.sin_addr.s_addr, wr->to->saddr.sin_port, 0, NULL) == -1)
+                        return NULL;
+                } else { // error
+                    if (dgram_create_send(rdata->sck, NULL, NULL, rdata->id_counter ++, wr->success_type, ERR_NONODE, wr->to->saddr.sin_addr.s_addr, wr->to->saddr.sin_port, 0, NULL) == -1)
+                        return NULL;
+                }
+
+                // suppression
+                if (i < (rdata->mugi->nb_responses - 1))
+                    memmove(wr, wr + sizeof(waiting_res), sizeof(waiting_res) * (rdata->mugi->nb_responses - i - 1));
+                rdata->mugi->nb_responses --;
+                i --;
             }
         }
 
