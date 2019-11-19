@@ -12,6 +12,10 @@
 
 #define LOGIN_MAX 32
 #define N 32
+#define YELLOW "\033[38;5;226m"
+#define PURPLE "\033[38;5;141m"
+#define RESET "\033[0m"
+#define CLEAR "\33[2K\r"
 
 typedef struct {
     int sck;

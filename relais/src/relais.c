@@ -531,7 +531,7 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
         return 1;
 
     char buf[DG_DATA_MAX];
-    int val = snprintf(buf, DG_DATA_MAX, "%s: %s", nd->field, dg->data + strnlen(username, N) + 1);
+    int val = snprintf(buf, DG_DATA_MAX, "%s:%s", nd->field, dg->data + strnlen(username, N) + 1);
     if (val >= DG_DATA_MAX) {
         fprintf(stderr, "snprintf truncate\n");
         return 1;

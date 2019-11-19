@@ -202,17 +202,47 @@ void print_read_res (const dgram *dg)
         printf("\33[2K\r  \033[36m%saucune donnée\033[0m\n", dg->data);
     else
     {
-      char temp[N] = "", *tmp = "";
-      strncpy(temp, dg->data, strlen(dg->data));
+      char temp[DG_DATA_MAX], *tmp;
+      strncpy(temp, dg->data, DG_DATA_MAX);
       char *field = strtok_r(temp, ":", &tmp);
-      char *log, *tout, *tmpval;
-      while ((tout = strtok_r(NULL, ",", &tmp)) != NULL)
+      char *log, *val, *boucle, *test;
+      //size_t length = strlen(field);
+      size_t max_pseudo = 0;
+      while ((boucle = strtok_r(NULL, ",", &tmp)) != NULL)
       {
-        char toutmp[N] = "";
-        strncpy(toutmp, tout, strlen(tout));
-        log = strtok_r(toutmp, ":", &tmpval);
-        log[strlen(log)] = '\0';
-        printf("\33[2K\r  \033[36m%s %s = %s\033[0m\n", log, field, tmpval);
+        log = strtok_r(boucle, ":", &test);
+        if (max_pseudo < strlen(log))
+          max_pseudo = strlen(log);
+      }
+
+      strncpy(temp, dg->data, DG_DATA_MAX);
+      tmp = NULL;
+      strtok_r(temp, ":", &tmp);
+      bool first_passage = true;
+      const size_t field_len = strlen(field);
+
+      while ((boucle = strtok_r(NULL, ",", &tmp)) != NULL)
+      {
+        log = strtok_r(boucle, ":", &test);
+        if (first_passage)
+        {
+          printf(CLEAR YELLOW " %s" RESET, field);
+          for (size_t i = 0; i < 4; i++)
+            printf(" ");
+          first_passage = false;
+        }
+        else
+        {
+          size_t total = 5 + field_len;
+          for (size_t i = 0; i < total; i++)
+            printf(" ");
+        }
+        printf(PURPLE"%s" RESET, log);
+        size_t marge = max_pseudo - strlen(log) + 3;
+        for (size_t i = 0; i < marge; i++)
+          printf(" ");
+        val = test;
+        printf("%s\n", val);
       }
     }
 }
