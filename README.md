@@ -18,7 +18,7 @@ Ce projet a été développé sous Licence GNU-GPLv3
 
 # Utilisation
 
-Ce projet est composé de 3 modules: les outils dans common, le programme client, le relais, et le noeud. Il suffit de soit compiler chaque module séparemment soit tout-en-un depuis la racine du projet:
+Ce projet est composé de 4 modules: les outils dans common, le programme client, le relais, et le noeud. Il suffit de soit compiler chaque module séparemment soit tout-en-un depuis la racine du projet:
 
 ```bash
 make
