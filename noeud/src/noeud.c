@@ -159,6 +159,7 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
     }
 
     if (found != -1) {
+        ndata->datas[found].value = '\0';
         strncpy(ndata->datas[found].value, tmp, strlen(tmp) + 1);
         //printf("tmp = %s et ndata = %s\n", tmp, ndata->datas[found].value);
     }
