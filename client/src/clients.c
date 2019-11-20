@@ -196,17 +196,16 @@ int send_auth (const char *login, const char *password, clientdata *cdata)
 void print_read_res (const dgram *dg)
 {
     bool empty = false;
-    if (strchr(dg->data, ':') == (dg->data + dg->data_len - 2))
+    if (strchr(dg->data, ':') == (dg->data + dg->data_len - 1))
         empty = true;
     if (empty)
-        printf("\33[2K\r  \033[36m%saucune donnée\033[0m\n", dg->data);
+      printf(CLEAR YELLOW" %s"RESET RED" aucune donnée"RESET"\n", dg->data);
     else
     {
       char temp[DG_DATA_MAX], *tmp;
       strncpy(temp, dg->data, DG_DATA_MAX);
       char *field = strtok_r(temp, ":", &tmp);
       char *log, *val, *boucle, *test;
-      //size_t length = strlen(field);
       size_t max_pseudo = 0;
       while ((boucle = strtok_r(NULL, ",", &tmp)) != NULL)
       {

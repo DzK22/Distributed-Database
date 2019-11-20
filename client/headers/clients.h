@@ -16,6 +16,7 @@
 #define PURPLE "\033[38;5;141m"
 #define RESET "\033[0m"
 #define CLEAR "\33[2K\r"
+#define RED "\033[38;5;9m"
 
 typedef struct {
     int sck;
