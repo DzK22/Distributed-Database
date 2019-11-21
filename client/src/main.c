@@ -10,15 +10,14 @@ clientdata *cdata_global = NULL;
 
 int main (int argc, char **argv)
 {
-    if (argc != 5) {
-        fprintf(stderr, "Usage: %s <relais_ip> <relais_port> <login> <mdp>\n", argv[0]);
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <relais_ip> <relais_port>\n", argv[0]);
         return EXIT_FAILURE;
     }
 
     const char *relais_ip = argv[1];
     const char *relais_port = argv[2];
-    const char *login = argv[3];
-    const char *password = argv[4];
+
 
     int sck = sck_create();
     if (sck == -1)
@@ -37,7 +36,6 @@ int main (int argc, char **argv)
     cdata.dgreceived = NULL;
     cdata.id_counter = 0;
     cdata.is_auth = false;
-    strncpy(cdata.login, login, LOGIN_MAX);
 
     if (sem_init(&cdata.gsem, 0, 1) == -1) {
         return EXIT_FAILURE;
@@ -56,10 +54,6 @@ int main (int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    printf(" > Tentative de connexion au serveur ...\n");
-    if (send_auth(login, password, &cdata) == -1)
-        return EXIT_FAILURE;
-
     // signal handler
     struct sigaction sa;
     sa.sa_handler = signal_handler;
@@ -72,6 +66,9 @@ int main (int argc, char **argv)
         perror("sigaction");
         return EXIT_FAILURE;
     }
+
+    if (ask_auth(&cdata) == -1)
+        return EXIT_FAILURE;
 
     sck_wait_for_request(sck, 300, true, &cdata, fd_can_read);
     return EXIT_FAILURE;

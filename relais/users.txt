@@ -6,3 +6,4 @@ danyl:elk:poids:age:taille:vision
 zorglub:33:prix:age
 monkeyD:luffy:age:haki:poids:mi
 lereseau:lavie:note
+raf:lebg:poids

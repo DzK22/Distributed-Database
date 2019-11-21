@@ -14,6 +14,8 @@
 #define N 32
 #define YELLOW "\033[38;5;226m"
 #define PURPLE "\033[38;5;141m"
+#define LOGIN_COLOR "\033[38;5;123m"
+#define BOLD "\033[1m"
 #define RESET "\033[0m"
 #define CLEAR "\33[2K\r"
 #define RED "\033[38;5;9m"
@@ -38,5 +40,6 @@ void print_prompt (const clientdata *cdata);
 bool req_timeout (const dgram *dg);
 void print_help ();
 void signal_handler (int sig);
+int ask_auth (clientdata *cdata);
 
 #endif

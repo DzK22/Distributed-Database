@@ -52,6 +52,7 @@ int read_stdin (clientdata *cdata)
 {
     char data[SCK_DATAGRAM_MAX];
     errno = 0;
+
     if ((fgets(data, SCK_DATAGRAM_MAX - 1, stdin) == NULL) && (errno != 0)) {
         perror("gets");
         return -1;
@@ -139,7 +140,8 @@ int exec_dg (const dgram *dg, void *data)
             if (dg->status == SUCCESS)
                 cdata->is_auth = true;
             else  // exec, print & quit
-                return -1;
+                if (ask_auth(cdata) == -1)
+                    return -1;
             print_prompt(cdata);
             break;
         case RRES_READ:
@@ -248,6 +250,8 @@ void print_read_res (const dgram *dg)
 
 void print_prompt (const clientdata *cdata)
 {
+    if (!cdata->is_auth)
+        return;
     printf("\033[33m[%s]\033[0m ", cdata->login);
     if (fflush(stdout) == -1)
         perror("fflush");
@@ -277,4 +281,60 @@ void signal_handler (int sig)
     if (dgram_create_send(cdata_global->sck, &cdata_global->dgsent, &dg, cdata_global->id_counter ++, CREQ_LOGOUT, NORMAL, cdata_global->relais_saddr->sin_addr.s_addr, cdata_global->relais_saddr->sin_port, 0, NULL) == -1)
         return;
     dg->resend_timeout_cb = req_timeout;
+}
+
+int ask_auth (clientdata *cdata)
+{
+    // get login and mdp
+    char login[LOGIN_MAX];
+    char password[LOGIN_MAX];
+    size_t password_len = 0;
+
+    printf(BOLD LOGIN_COLOR " Login: " RESET);
+    fgets(login, LOGIN_MAX, stdin);
+    login[strlen(login) - 1] = '\0';
+
+    bool quit = false;
+    char c;
+    unsigned i;
+    system ("/bin/stty raw");
+
+    while (1) {
+        printf(CLEAR BOLD LOGIN_COLOR " Password: " RESET);
+        for (i = 0; i < password_len; i ++)
+            printf("*");
+
+        if (quit)
+            break;
+
+        switch (c = getchar()) {
+            case '\r':
+                quit = true;
+                break;
+            case '\n':
+                quit = true;
+                break;
+            case 127: // del char
+                if (password_len > 0)
+                    password[-- password_len] = '\0';
+                break;
+            case EOF:
+                perror("getchar");
+                return -1;
+            default:
+                password[password_len] = c;
+                password_len ++;
+        }
+
+        if (quit || (password_len >= LOGIN_MAX))
+            password[password_len] = '\0';
+    }
+
+    system ("/bin/stty cooked");
+    strncpy(cdata->login, login, LOGIN_MAX);
+    printf("\n > Tentative de connexion au serveur ...\n");
+    if (send_auth(login, password, cdata) == -1)
+        return -1;
+
+    return 0;
 }
