@@ -320,10 +320,15 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     tmp = NULL;
     field_plus_val = strtok_r(data_cpy, ",", &tmp);
+    printf("data = %s\n", data_cpy);
     while (field_plus_val != NULL) {
         for (i = 0; i < rdata->mugi->nb_nodes; i ++) {
             tmp2 = NULL;
-            strncpy(field_plus_val_cpy, field_plus_val, MAX_ATTR);
+            bytes = snprintf(field_plus_val_cpy, MAX_ATTR, "%s", field_plus_val);
+            if (bytes < 0) {
+                perror("snprintf");
+                return -1;
+            }
             field = strtok_r(field_plus_val_cpy, ":", &tmp2);
             if (strncmp(field, rdata->mugi->nodes[i].field, strnlen(field, MAX_ATTR)) != 0)
                 continue;
