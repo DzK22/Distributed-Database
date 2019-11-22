@@ -110,11 +110,11 @@ Le serveur d'accès \textbf{stocke une liste}:
 \begin{itemize}
     \item Des \textit{infos clients} (login, mot de passe et champs autorisés en lecture).
 
-    \item Des \textit{clients connectés} (uniquement ceux dont l'authentification a réussie). On stocke leurs \underline{coordonnées} (IP + port), leur \underline{login}, et la \underline{date} (timestamp) de leur dernier message (déconnexion forcée après \textbf{timeout}).
+    \item Des \textit{clients connectés} (uniquement ceux dont l'authentification a réussi). On stocke leurs \underline{coordonnées} (IP + port), leur \underline{login}, et la \underline{date} (timestamp) de leur dernier message (déconnexion forcée après \textbf{timeout}).
 
-    \item Des \textit{serveurs de données connectés}. On stocke leurs \underline{coordonnées} (IP + port), le \underline{champ} qu'ils déservent (âge, taille, etc.), un \underline{identifiant} unique qui leur est attribué (utile pour faire correspondre un message reçu avec un serveur de données), la \underline{date} (timestamp) de dernière communication avec ce dernier (retiré de force après \textbf{timeout}), ainsi qu'un booléan \underline{active} pour savoir si le serveur de données est en capacité de traiter des requêtes ou non.
+    \item Des \textit{serveurs de données connectés}. On stocke leurs \underline{coordonnées} (IP + port), le \underline{champ} qu'ils désservent (âge, taille, etc.), un \underline{identifiant} unique qui leur est attribué (utile pour faire correspondre un message reçu avec un serveur de données), la \underline{date} (timestamp) de dernière communication avec ce dernier (retiré de force après \textbf{timeout}), ainsi qu'un booléan \underline{active} pour savoir si le serveur de données est en capacité de traiter des requêtes ou non.
 
-    Par exemple, un serveur de données est \textit{inactif} (active == false) lorsqu'il vient de se connecter et qu'il y a déjà \textbf{un serveur de données de même champ} connecté, le temps que ce serveur de données déjà connecté lui transmet ses données (requêtes SYNC + GETDATA).
+    Par exemple, un serveur de données est \textit{inactif} (active == false) lorsqu'il vient de se connecter et qu'il y a déjà \textbf{un serveur de données de même champ} connecté, le temps que ce serveur de données déjà connecté lui transmette ses données (requêtes SYNC + GETDATA).
 
     \item Des \textit{réponses en attente}. Il s'agit de faire correspondre une requête \textit{Serveur d'accès $\ra$ Serveur\underline{s} de données} avec les réponses à cette requête afin de n'envoyer qu'une seule et unique réponse au client l'ayant engendré en fonction des réponses / non réponses des serveurs de données interrogés (pour les requêtes \textit{écriture} et \textit{suppression}).
 
@@ -148,7 +148,7 @@ La déconnexion "propre" d'un client (bye) est également réalisée lors de la 
 
 \subsection{Le serveur de données}
 
-Le serveur de données doit traiter les requêtes du serveur d'accès et lui envoyer une réponse en fonction de ses données. Pour ce faire, il doit donc \underline{stocker une liste} associant un login à une valeur (donnée), ainsi que le champ qu'il doit gérer (âge, taille, etc.).
+Le serveur de données doit traiter les requêtes du serveur d'accès et lui envoyer une réponse en fonction de ses données. Pour se faire, il doit donc \underline{stocker une liste} associant un login à une valeur (donnée), ainsi que le champ qu'il doit gérer (âge, taille, etc.).
 
 La méthode de connexion d'un serveur de données au serveur d'accès est la suivante:
 \begin{enumerate}
@@ -178,7 +178,7 @@ En utilisant cette API, les \textbf{principaux mécanismes} ci-dessous sont \tex
     \item \textit{Transformation} des données brutes en structures "dgram" (parser).
     \item Envoi d'un \textit{ACK} pour valider la réception d'un paquet.
     \item Assurer l'\textit{intégrité des données}.
-    \item \textit{Ré envoi} des données si pas de ACK reçu après timeout.
+    \item \textit{Renvoi} des données si pas de ACK reçu après timeout.
     \item S'assurer que le message est "entier" (si non entier, attente des autres morceaux).
 \end{itemize}
 
@@ -207,18 +207,18 @@ Nous avons choisis de séparer les \textit{types de messages} en 4 catégories:
 
 Ces préfixes sont suivis d'un type explicite de requête / réponse (AUTH, READ, WRITE, DELETE, MEET, GETDATA, SYNC, etc.).
 
-\textit{MEET} permet la connecter un serveur de données au serveur d'accès.
+\textit{MEET} permet la connexion d'un serveur de données au serveur d'accès.
 
 \textit{GETDATA} permet de demander à un serveur de données qu'il envoie toutes ses données (pour futur SYNC).
 
-\textit{SYNC} demander à un serveur de données de replacer toutes ses données par celles envoyées.
+\textit{SYNC} demander à un serveur de données de remplacer toutes ses données par celles envoyées.
 
 Le \textit{status} d'un message peut être:
 \begin{itemize}
     \item SUCCESS $\ra$ succès de la requête (écriture réussie, etc.).
     \item NORMAL $\ra$ état normal (requête de lecture, etc.).
     \item ERR\_NOREPLY $\ra$ erreur, pas de réponse (le relais ne répond pas, etc.).
-    \item ERR\_AUTHFAILED $\ra$ erreur, l'authentification a échouée.
+    \item ERR\_AUTHFAILED $\ra$ erreur, l'authentification a échoué.
     \item ERR\_NONODE $\ra$ erreur, aucun serveur de données correspondant trouvé.
     \item ERR\_NOPERM $\ra$ erreur, pas les permissions requises pour la lecture.
     \item ERR\_SYNTAX $\ra$ erreur de syntaxe.
@@ -239,17 +239,17 @@ Chaque message qui transite entre un client, le serveur d'accès et un serveur d
 
 \subsection{Structure de message et associés}
 
-La structure qui représente un message (\textbf{dgram}) stocke, en plus des différentes attributs d'en tête et des données vues ci-dessus, divers éléments importants:
+La structure qui représente un message (\textbf{dgram}) stocke, en plus des différents attributs d'en tête et des données vues ci-dessus, divers éléments importants:
 \begin{itemize}
     \item \textit{IP} et port de provenance / de destination.
     \item La \textit{date} de création / de réception (timestamp).
-    \item Le nombre de ré envois (lorsque non réception de ACK de la part du récepteur du message).
-    \item La \textit{fonction de callback} appelée lorsque le nombre de ré envois a enclenché le timeout associé, ainsi qu'un \textit{paramètre} pour ce callback.
+    \item Le nombre de renvoi (lorsque non réception de ACK de la part du récepteur du message).
+    \item La \textit{fonction de callback} appelée lorsque le nombre de renvoi a enclenché le timeout associé, ainsi qu'un \textit{paramètre} pour ce callback.
 \end{itemize}
 
 Les \textit{fonctions associées} aux \textbf{dgram} nécessitent souvent une ou deux listes, qui sont propres à chaque module, parmi:
 \begin{itemize}
-    \item \underline{dgsent}: la liste des \textit{dgram envoyés}. Chaque message envoyé est \textbf{automatiquement supprimé} lors de la réception du ACK correspondant, ou après timeout. Les conserver permet de les \textit{ré envoyer} si le destinataire d'envoi pas de ACK de confirmation après un certain temps.
+    \item \underline{dgsent}: la liste des \textit{dgram envoyés}. Chaque message envoyé est \textbf{automatiquement supprimé} lors de la réception du ACK correspondant, ou après timeout. Les conserver permet de les \textit{ré-envoyer} si le destinataire n'envoie pas de ACK de confirmation après un certain temps.
     \item \underline{dgreceived:} la liste des \textit{dgram reçus}. Chaque message reçu est automatiquement supprimé après envoi du ACK correspondant. Les conserver permet d'attendre que le message soit entier avant de l'utiliser (et timeout si non entier après un certain temps).
 \end{itemize}
 
@@ -257,7 +257,7 @@ Les \textit{fonctions associées} aux \textbf{dgram} nécessitent souvent une ou
 
 Les messages ont un \textit{format bien précis} (en-tête + données), mais les données ont aussi un format précis qui varie selon qui est l'émetteur et qui est le récepteur entre le client, le serveur d'accès et le serveur de données. Connaître les formats utilisés (ci-dessous) ainsi que le format des messages, leur types et status permet l'\textit{interopérabilité} entre les modules développés ici et des modules externes dans le cas où tous utilisent les mêmes protocoles.
 
-On suppose ici que les requêtes réussissent tous, et donc la section données n'est pas vide (sauf exceptions).
+On suppose ici que les requêtes réussissent totess, et donc la section données n'est pas vide (sauf exceptions).
 
 \subsubsection{Client $\ra$ Serveur d'accès (CREQ)}
 

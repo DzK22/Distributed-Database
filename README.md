@@ -45,6 +45,10 @@ Pour la mise en marche, il faut démarrer une instance du serveur d'accès (rela
 ./main <relais_ip> <relais_port>
 ```
 
+**Script**
+```bash
+On a mis à disposition un script bash qui compile puis lance notre programme avec 2 serveurs de données de type age et 2 autres de type taille + N clients avec N passé en paramètre du script comme ceci ./test.h N
+
 ## Interface du client
 
 Après s'être authentifié, on peut exécuter les requêtes suivantes:

@@ -1,0 +1,17 @@
+\babel@toc {french}{}
+\contentsline {section}{\numberline {1}*}{1}{section.1}% 
+\contentsline {section}{\numberline {2}Architecture de la banque de donn\IeC {\'e}es}{2}{section.2}% 
+\contentsline {subsection}{\numberline {2.1}Le serveur d'acc\IeC {\`e}s}{2}{subsection.2.1}% 
+\contentsline {subsection}{\numberline {2.2}Le client}{3}{subsection.2.2}% 
+\contentsline {subsection}{\numberline {2.3}Le serveur de donn\IeC {\'e}es}{4}{subsection.2.3}% 
+\contentsline {subsection}{\numberline {2.4}Les outils r\IeC {\'e}seau (common)}{4}{subsection.2.4}% 
+\contentsline {section}{\numberline {3}Protoles utilis\IeC {\'e}s}{5}{section.3}% 
+\contentsline {subsection}{\numberline {3.1}Types de messages et status}{5}{subsection.3.1}% 
+\contentsline {subsection}{\numberline {3.2}Format des messages}{6}{subsection.3.2}% 
+\contentsline {subsection}{\numberline {3.3}Structure de message et associ\IeC {\'e}s}{6}{subsection.3.3}% 
+\contentsline {subsection}{\numberline {3.4}Format des donn\IeC {\'e}es}{7}{subsection.3.4}% 
+\contentsline {subsubsection}{\numberline {3.4.1}Client $\rightarrow $ Serveur d'acc\IeC {\`e}s (CREQ)}{7}{subsubsection.3.4.1}% 
+\contentsline {subsubsection}{\numberline {3.4.2}Serveur d'acc\IeC {\`e}s $\rightarrow $ Serveur de donn\IeC {\'e}es (RREQ, RNRES)}{7}{subsubsection.3.4.2}% 
+\contentsline {subsubsection}{\numberline {3.4.3}Serveur de donn\IeC {\'e}es $\rightarrow $ Serveur d'acc\IeC {\`e}s (NREQ, NRES)}{8}{subsubsection.3.4.3}% 
+\contentsline {subsubsection}{\numberline {3.4.4}Serveur d'acc\IeC {\`e}s $\rightarrow $ Client (RRES)}{8}{subsubsection.3.4.4}% 
+\contentsline {section}{\numberline {4}Conclusion}{8}{section.4}% 
