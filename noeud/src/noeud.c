@@ -204,6 +204,7 @@ int exec_rreq_delete (const dgram *dg, nodedata *ndata)
     {
         if (strncmp(ndata->datas[i].login, username, strlen(username)) == 0)
         {
+            memset(ndata->datas[i].value, 0, FIELD_MAX);
             memmove(&ndata->datas[i], &ndata->datas[i + 1], sizeof(user_info) * (ndata->nb_infos - i - 1));
             ndata->nb_infos--;
         }
