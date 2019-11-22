@@ -140,7 +140,7 @@ int exec_creq_auth (const dgram *dg, relaisdata *rdata)
                     return -1;
                 }
             }
-
+            memset(rdata->pd->hosts[rdata->pd->nb_hosts].login, 0, H);
             strncpy(rdata->pd->hosts[rdata->pd->nb_hosts].login, login, H);
             struct sockaddr_in saddr;
             saddr.sin_family = AF_INET;
@@ -246,6 +246,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
 
     // syntax check
     bool syntax_err = false;
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     field_plus_val = strtok_r(data_cpy, ",", &tmp);
     if (field_plus_val == NULL) {
@@ -254,6 +255,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
     }
     while (!syntax_err && (field_plus_val != NULL)) {
         tmp2 = NULL;
+        memset(field_plus_val_cpy, 0, MAX_ATTR);
         strncpy(field_plus_val_cpy, field_plus_val, MAX_ATTR);
         field = strtok_r(field_plus_val_cpy, ":", &tmp2);
         if ((field == NULL) || (strnlen(field, MAX_ATTR) == 0))  {
@@ -282,6 +284,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
     }
 
     // verifier les noeuds sinon NONODE
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     tmp = NULL;
     field_plus_val = strtok_r(data_cpy, ",", &tmp);
@@ -289,6 +292,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
         filled = false;
         for (i = 0; i < rdata->pd->nb_nodes; i ++) {
             tmp2 = NULL;
+            memset(field_plus_val_cpy, 0, MAX_ATTR);
             strncpy(field_plus_val_cpy, field_plus_val, MAX_ATTR);
             field = strtok_r(field_plus_val_cpy, ":", &tmp2);
             if (strncmp(field, rdata->pd->nodes[i].field, strnlen(field, MAX_ATTR)) != 0)
@@ -313,6 +317,7 @@ int exec_creq_write (const dgram *dg, relaisdata *rdata)
         return 1;
 
     // main loop to send data
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     tmp = NULL;
     field_plus_val = strtok_r(data_cpy, ",", &tmp);
@@ -477,6 +482,7 @@ int exec_nreq_meet (const dgram *dg, relaisdata *rdata)
     saddr.sin_family = AF_INET;
     saddr.sin_addr.s_addr = dg->addr;
     saddr.sin_port = dg->port;
+    memset(rdata->pd->nodes[rdata->pd->nb_nodes].field, 0, MAX_ATTR);
     strncpy(rdata->pd->nodes[rdata->pd->nb_nodes].field, dg->data, MAX_ATTR);
     rdata->pd->nodes[rdata->pd->nb_nodes].saddr = saddr;
     rdata->pd->nodes[rdata->pd->nb_nodes].id = rdata->pd->node_id_counter;
@@ -520,6 +526,7 @@ int exec_nres_read (const dgram *dg, relaisdata *rdata)
 {
     // /!/ dg->data = <user>:<data>
     char *username, *tmp, data_cpy[DG_DATA_MAX];
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     username = strtok_r(data_cpy, ":", &tmp);
     if (username == NULL) {
@@ -572,6 +579,7 @@ int exec_nres_write (const dgram *dg, relaisdata *rdata)
 char * get_id_from_dg(const dgram *dg)
 {
     char *id, *tmp, data_cpy[DG_DATA_MAX];
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     id = strtok_r(data_cpy, ":", &tmp);
     if (!id) {
@@ -619,6 +627,7 @@ int exec_nres_getdata (const dgram *dg, relaisdata *rdata)
 {
     // dg->data = <NODE_ID>:<DATA>
     char data_cpy[DG_DATA_MAX];
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     char *tmp;
     char *node_id = strtok_r(data_cpy, ":", &tmp);
@@ -731,6 +740,7 @@ user * read_has_rights (const dgram *dg, const relaisdata *rdata)
     bool found;
     char *tmp, *attr = NULL, data_cpy[DG_DATA_MAX];
     size_t i, attr_len;
+    memset(data_cpy, 0, dg->data_len + 1);
     strncpy(data_cpy, dg->data, dg->data_len + 1); // + 1 for the null byte
     attr = strtok_r(data_cpy, ",", &tmp);
     while (attr != NULL) {
@@ -811,14 +821,17 @@ privdata *init_privdata ()
         fgets(line, N, fp);
         line[strlen(line) - 1] = '\0';
         str = strtok_r(line, ":", &tmp); // login
+        memset(pd->users[i].login, 0, MAX_ATTR);
         strncpy(pd->users[i].login, str, MAX_ATTR);
         str = strtok_r(NULL, ":", &tmp); // psswd
         if (str == NULL)
             return NULL;
+        memset(pd->users[i].mdp, 0, MAX_ATTR);
         strncpy(pd->users[i].mdp, str, MAX_ATTR);
 
         size_t j = 0;
         while ((str = strtok_r(NULL, ":", &tmp)) != NULL) {
+            memset(pd->users[i].attributs[j], 0, MAX_ATTR);
             strncpy(pd->users[i].attributs[j], str,  MAX_ATTR);
             j ++;
         }

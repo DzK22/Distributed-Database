@@ -142,6 +142,7 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
     // dg->data = <username>:<field_value>
 
     char *username, *tmp, data_cpy[DG_DATA_MAX];
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     char *id = strtok_r(data_cpy, ":", &tmp);                  //pour enlever l'id;
     username = strtok_r(NULL, ":", &tmp);
@@ -161,10 +162,16 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
     }
 
     if (found != -1)
-        strncpy(ndata->datas[found].value, tmp, strlen(tmp) + 1);
+    {
+      memset(ndata->datas[ndata->nb_infos].value, 0, FIELD_MAX);
+      strncpy(ndata->datas[found].value, tmp, FIELD_MAX);
+    }
     else {
-        strncpy(ndata->datas[ndata->nb_infos].login, username, strlen(username));
-        strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
+        memset(ndata->datas[ndata->nb_infos].login, 0, FIELD_MAX);
+        strncpy(ndata->datas[ndata->nb_infos].login, username, FIELD_MAX);
+
+        memset(ndata->datas[ndata->nb_infos].value, 0, FIELD_MAX);
+        strncpy(ndata->datas[ndata->nb_infos].value, tmp, FIELD_MAX);
         ndata->nb_infos++;
     }
 
@@ -184,6 +191,7 @@ int exec_rreq_write (const dgram *dg, nodedata *ndata)
 int exec_rreq_delete (const dgram *dg, nodedata *ndata)
 {
     char *username, *tmp, data_cpy[DG_DATA_MAX];
+    memset(data_cpy, 0, DG_DATA_MAX);
     strncpy(data_cpy, dg->data, DG_DATA_MAX);
     char *id = strtok_r(data_cpy, ":", &tmp);                  //pour enlever l'id;
     username = strtok_r(NULL, ":", &tmp);
@@ -244,8 +252,11 @@ int exec_rreq_sync (const dgram *dg, nodedata *ndata)
     while ((tmp = (strtok_r(rest, ";", &rest))) != NULL)
     {
         tmp2 = strtok_r(tmp, ",", &tmp);
-        strncpy(ndata->datas[ndata->nb_infos].login, tmp2, strlen(tmp2));
-        strncpy(ndata->datas[ndata->nb_infos].value, tmp, strlen(tmp));
+        memset(ndata->datas[ndata->nb_infos].login, 0, FIELD_MAX);
+        strncpy(ndata->datas[ndata->nb_infos].login, tmp2, FIELD_MAX);
+
+        memset(ndata->datas[ndata->nb_infos].value, 0, FIELD_MAX);
+        strncpy(ndata->datas[ndata->nb_infos].value, tmp, FIELD_MAX);
         ndata->nb_infos++;
     }
 

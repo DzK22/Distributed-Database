@@ -201,6 +201,7 @@ void print_read_res (const dgram *dg)
     else
     {
       char temp[DG_DATA_MAX], *tmp;
+      memset(temp, 0, DG_DATA_MAX);
       strncpy(temp, dg->data, DG_DATA_MAX);
       char *field = strtok_r(temp, ":", &tmp);
       char *log, *val, *boucle, *test;
@@ -212,6 +213,7 @@ void print_read_res (const dgram *dg)
           max_pseudo = strlen(log);
       }
 
+      memset(temp, 0, DG_DATA_MAX);
       strncpy(temp, dg->data, DG_DATA_MAX);
       tmp = NULL;
       strtok_r(temp, ":", &tmp);
@@ -332,6 +334,7 @@ int ask_auth (clientdata *cdata)
     }
 
     system ("/bin/stty cooked");
+    memset(cdata->login, 0, LOGIN_MAX);
     strncpy(cdata->login, login, LOGIN_MAX);
     printf("\n > Tentative de connexion au serveur ...\n");
     if (send_auth(login, password, cdata) == -1)
