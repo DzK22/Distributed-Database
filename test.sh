@@ -1,6 +1,11 @@
 #!/bin/bash
 make
 
+if [ $# -ne 1 ]; then
+  echo "mauvais argument" > /dev/fd/2;
+  exit 1;
+fi
+
 relais=$(echo $(pwd)"/relais")
 
 noeud=$(echo $(pwd)"/noeud")
@@ -22,8 +27,7 @@ gnome-terminal --tab \
 gnome-terminal --tab \
   --working-directory=$noeud --title='taille2' --command="./main 127.0.0.1 2100 taille"
 
+for i in $(seq 1 $1); do
 gnome-terminal --tab \
-  --working-directory=$client --title='client1' --command="./main 127.0.0.1 2100 francois lamachine"
-
-gnome-terminal --tab \
-  --working-directory=$client --title='client2' --command="./main 127.0.0.1 2100 bonsoir tata"
+  --working-directory=$client --title="client$i" --command="./main 127.0.0.1 2100"
+done
