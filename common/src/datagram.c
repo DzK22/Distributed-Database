@@ -1,3 +1,5 @@
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
+
 #include "../headers/datagram.h"
 
 bool dg_debug_active = true;

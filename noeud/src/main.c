@@ -1,9 +1,10 @@
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
 #include "../headers/noeud.h"
 
 int main (int argc, char **argv)
 {
     if (argc != 4) {
-        fprintf(stderr, "Utilisation: %s <relais_addr> <relais_port> <champ stocké> <fichier données>\n", argv[0]);
+        fprintf(stderr, "Utilisation: %s <relais_addr> <relais_port> <champ stocké>\n", argv[0]);
         return EXIT_FAILURE;
     }
     const char *relais_addr = argv[1];

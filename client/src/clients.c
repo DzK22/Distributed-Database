@@ -1,8 +1,4 @@
-/**
- * \file clients.c.
- * \brief Définitions des fonctions qui gèrent la partie client du projet.
- * \author François et Danyl.
- */
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
 
 #include "../headers/clients.h"
 
@@ -268,13 +264,16 @@ bool req_timeout (const dgram *dg)
 
 void print_help ()
 {
-    printf(" \033[35m[AIDE] Requêtes disponibles:\033[0m\n\tlire <champs1>[,...]\n\tecrire <champs1>:<valeur1>[,...]\n\tsupprimer\n\tclear\n\tbye\n");
+    printf(PURPLE " [AIDE] Requêtes disponibles:" RESET "\n\tlire <champs1>[,...]\n\tecrire <champs1>:<valeur1>[,...]\n\tsupprimer\n\tclear\n\tbye\n");
 }
 
 void signal_handler (int sig)
 {
     if (sig != SIGINT)
         return;
+
+    if (!cdata_global->is_auth)
+        exit(EXIT_FAILURE);
 
     printf("\n");
     dgram *dg;
@@ -298,6 +297,7 @@ int ask_auth (clientdata *cdata)
     char c;
     unsigned i;
     system ("/bin/stty raw");
+    errno = 0;
 
     while (1) {
         printf(CLEAR BOLD LOGIN_COLOR " Password: " RESET);
@@ -319,7 +319,8 @@ int ask_auth (clientdata *cdata)
                     password[-- password_len] = '\0';
                 break;
             case EOF:
-                perror("getchar");
+                if (errno != 0)
+                    perror("getchar");
                 return -1;
             default:
                 password[password_len] = c;

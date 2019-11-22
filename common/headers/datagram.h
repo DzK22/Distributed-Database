@@ -1,3 +1,5 @@
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
+
 #ifndef __DATAGRAM_H__
 #define __DATAGRAM_H__
 

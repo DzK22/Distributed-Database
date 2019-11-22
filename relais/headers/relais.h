@@ -1,8 +1,4 @@
-/**
- * \file relais.h
- * \brief Déclarations des fonctions de gestion du serveur d'accès
- * \author François et Danyl
- */
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
 
 #ifndef __RELAIS_H__
 #define __RELAIS_H__
@@ -47,10 +43,10 @@ typedef struct waiting_res {
 } waiting_res;
 
 /**
- * \struct mugiwara
+ * \struct privdata
  * \brief Structure contenant les utilisateurs (fichier), les clients actuellment connectés et les noeuds de données.
  */
-typedef struct mugiwara {
+typedef struct privdata {
     user *users;        // tableau de tous les utilisateurs (fichier chargé)
     size_t nb_users;    // nombre d'utilisateurs stockés dans le fichier chargé
 
@@ -67,14 +63,14 @@ typedef struct mugiwara {
     size_t nb_responses;      //nombre de node_responses actuel
     size_t responses_counter;
     size_t max_responses;
-} mugiwara;
+} privdata;
 
 typedef struct {
     int sck;
     dgram *dgsent;
     dgram *dgreceived;
     unsigned id_counter;
-    mugiwara *mugi;
+    privdata *pd;
     sem_t rsem;
     sem_t gsem;
 } relaisdata;
@@ -98,7 +94,7 @@ int exec_nres_sync (const dgram *dg, relaisdata *rdata);
 
 bool test_auth (const char *login, const relaisdata *rdata);
 user * read_has_rights (const dgram *dg, const relaisdata *rdata);
-mugiwara *init_mugiwara ();
+privdata *init_privdata ();
 user * get_user_from_dg (const dgram *dg, const relaisdata *rdata);
 node * get_node_from_dg (const dgram *dg, const relaisdata *rdata);
 auth_user * get_auth_user_from_login (const char *login, const relaisdata *rdata);

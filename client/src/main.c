@@ -1,8 +1,4 @@
-/**
- * \file main.c
- * \brief Main Page! Gère le programme des clients
- * \author François et Danyl
- */
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
 
 #include "../headers/clients.h"
 extern bool dg_debug_active;

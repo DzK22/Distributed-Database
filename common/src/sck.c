@@ -1,3 +1,5 @@
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
+
 #include "../headers/sck.h"
 
 int sck_create ()

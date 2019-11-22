@@ -1,3 +1,5 @@
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
+
 #ifndef __NOEUD_H__
 #define __NOEUD_H__
 

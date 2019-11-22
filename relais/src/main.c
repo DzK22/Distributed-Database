@@ -1,9 +1,5 @@
-/**
- * \file main.c
- * \brief Main program!
- * \author François et Danyl
- */
-
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
 #include "../headers/relais.h"
 
 int main (int argc, char **argv)
@@ -22,13 +18,13 @@ int main (int argc, char **argv)
     if (sck_bind(sck, atoi(port)) == -1)
         return EXIT_FAILURE;
 
-    mugiwara *mugi = init_mugiwara();
+    privdata *pd = init_privdata();
     relaisdata rdata;
     rdata.sck = sck;
     rdata.dgsent = NULL;
     rdata.dgreceived = NULL;
     rdata.id_counter = 0;
-    rdata.mugi = mugi;
+    rdata.pd = pd;
 
     if (sem_init(&rdata.rsem, 0, 1) == -1) {
         perror("sem_init");

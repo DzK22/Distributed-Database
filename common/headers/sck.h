@@ -1,3 +1,5 @@
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
+
 #ifndef __SCK_H__
 #define __SCK_H__
 

@@ -1,8 +1,4 @@
-/**
- * \file clients.h
- * \brief Déclarations des fonctions de gestion de clients
- * \author François et Danyl
- */
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
 
 #ifndef __CLIENTS_H__
 #define __CLIENTS_H__

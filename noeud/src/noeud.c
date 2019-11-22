@@ -1,3 +1,5 @@
+// Auteurs: Danyl El-Kabir et François Grabenstaetter
+
 #include "../headers/noeud.h"
 
 int sck_can_read (const int sck, void *data)
