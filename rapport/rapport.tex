@@ -88,7 +88,9 @@
 \setlength{\parskip}{0.2cm}
 \maketitle
 
-\includegraphics[scale=1.6]{img/enonce.png}
+\begin{center}
+    \includegraphics[scale=1.6]{img/enonce.png}
+\end{center}
 
 \section{Architecture de la banque de données}
 
@@ -108,9 +110,9 @@ Le serveur d'accès \textbf{stocke une liste}:
 \begin{itemize}
     \item Des \textit{infos clients} (login, mot de passe et champs autorisés en lecture).
 
-    \item Des \textit{clients connectés} (uniquement ceux dont l'authentification a réussie). On stocke leur \underline{coordonnées} (IP + port), leur \underline{login}, et la \underline{date} (timestamp) de leur dernier message (déconnexion forcée après \textbf{timeout}).
+    \item Des \textit{clients connectés} (uniquement ceux dont l'authentification a réussie). On stocke leurs \underline{coordonnées} (IP + port), leur \underline{login}, et la \underline{date} (timestamp) de leur dernier message (déconnexion forcée après \textbf{timeout}).
 
-    \item Des \textit{serveurs de données connectés}. On stocke leur \underline{coordonnées} (IP + port), le \underline{champ} qu'ils déservent (âge, taille, etc.), un \underline{identifiant} unique qui leur est attribué (utile pour faire correspondre un message reçu avec un serveur de données), la \underline{date} (timestamp) de dernière communication avec ce dernier (retiré de force après \textbf{timeout}), ainsi qu'un booléan \underline{active} pour savoir si le serveur de données est en capacité de traiter des requêtes ou non.
+    \item Des \textit{serveurs de données connectés}. On stocke leurs \underline{coordonnées} (IP + port), le \underline{champ} qu'ils déservent (âge, taille, etc.), un \underline{identifiant} unique qui leur est attribué (utile pour faire correspondre un message reçu avec un serveur de données), la \underline{date} (timestamp) de dernière communication avec ce dernier (retiré de force après \textbf{timeout}), ainsi qu'un booléan \underline{active} pour savoir si le serveur de données est en capacité de traiter des requêtes ou non.
 
     Par exemple, un serveur de données est \textit{inactif} (active == false) lorsqu'il vient de se connecter et qu'il y a déjà \textbf{un serveur de données de même champ} connecté, le temps que ce serveur de données déjà connecté lui transmet ses données (requêtes SYNC + GETDATA).
 
@@ -174,7 +176,7 @@ En utilisant cette API, les \textbf{principaux mécanismes} ci-dessous sont \tex
 \begin{itemize}
     \item Gestion des \textit{pertes}.
     \item \textit{Transformation} des données brutes en structures "dgram" (parser).
-    \item Envoie d'un \textit{ACK} pour valider la réception d'un paquet.
+    \item Envoi d'un \textit{ACK} pour valider la réception d'un paquet.
     \item Assurer l'\textit{intégrité des données}.
     \item \textit{Ré envoi} des données si pas de ACK reçu après timeout.
     \item S'assurer que le message est "entier" (si non entier, attente des autres morceaux).
